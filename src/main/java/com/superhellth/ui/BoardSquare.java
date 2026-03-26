@@ -5,6 +5,8 @@ import com.superhellth.basics.PieceType;
 import com.superhellth.utils.BoardUtils;
 
 import javafx.scene.control.Button;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 
 public class BoardSquare extends Button {
 
@@ -15,25 +17,26 @@ public class BoardSquare extends Button {
 
     public BoardSquare(int file, int rank) {
         super();
-        this.setPrefSize(40, 40);
-        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(file, rank) ? "white" : "black"));
+        this.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(file, rank) ? "white" : "beige"));
         // this.setStyle("-fx-font-color: red");
     }
 
-    public void setPieceColor(Color pieceColor) {
-        this.pieceColor = pieceColor;
-        if (pieceColor == Color.WHITE) {
-            this.setStyle(this.getStyle() + "; -fx-text-fill: white;");
-        } else if (pieceColor == Color.BLACK) {
-            this.setStyle(this.getStyle() + "; -fx-text-fill: black;");
-        }
-    }
-
-    public void setPieceType(PieceType pieceType) {
+    public void setPiece(PieceType pieceType, Color pieceColor) {
         this.pieceType = pieceType;
+        this.pieceColor = pieceColor;
         if (pieceType != null && pieceType != PieceType.EMPTY) {
-            this.setText(pieceType.toString().substring(0, 1));
+            String path = "/images/" + pieceColor.name().toLowerCase()
+                    + "-" + pieceType.name().toLowerCase() + ".png";
+            Image image = new Image(getClass().getResourceAsStream(path));
+            ImageView imageView = new ImageView(image);
+            imageView.setPreserveRatio(true);
+            imageView.fitWidthProperty().bind(this.widthProperty().multiply(0.8));
+            imageView.fitHeightProperty().bind(this.heightProperty().multiply(0.8));
+            this.setGraphic(imageView);
+            this.setText("");
         } else {
+            this.setGraphic(null);
             this.setText("");
         }
     }
