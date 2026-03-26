@@ -1,8 +1,12 @@
 package com.superhellth.basics;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class Board {
 
     private static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    private static final String TEST_FEN = "8/8/8/2k5/4K3/8/8/8 w - - 0 1";
     private Color activeColor;
     private long[][] bitboards;
     private boolean[] castlingRights; // [white kingside, white queenside, black kingside, black queenside]
@@ -12,21 +16,28 @@ public class Board {
 
     public Board() {
         this.activeColor = Color.WHITE;
-        this.bitboards = new long[2][6];
+        this.bitboards = new long[3][6];
         this.castlingRights = new boolean[4];
         this.enPassantSquare = -1;
         this.halfmoveClock = 0;
         this.fullmoveNumber = 1;
+        this.bitboards[2][0] = -1L;
 
-        this.loadFromFEN(Board.STARTING_FEN);
+        this.loadFromFEN(Board.TEST_FEN);
+    }
+
+    private void placePiece(Color color, PieceType pieceType, int square) {
+        this.bitboards[color.ordinal()][pieceType.ordinal()] |= (1L << square);
+        this.bitboards[2][0] &= ~(1L << square);
     }
 
     public void resetBoard() {
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 6; j++) {
-                bitboards[i][j] = 0L;
+                this.bitboards[i][j] = 0L;
             }
         }
+        this.bitboards[2][0] = -1L;
         this.activeColor = Color.WHITE;
         this.castlingRights = new boolean[4];
         this.enPassantSquare = -1;
@@ -37,7 +48,7 @@ public class Board {
     public void loadFromFEN(String fen) {
         this.resetBoard();
 
-        int boardIndex = 0;
+        int boardIndex = 56;
         int runningIndex = 0;
         char currentChar = fen.charAt(runningIndex);
         while (currentChar != ' ') {
@@ -66,12 +77,12 @@ public class Board {
                     default ->
                         throw new IllegalArgumentException("Invalid FEN character: " + currentChar);
                 }
-                bitboards[color.ordinal()][pieceType.ordinal()] |= (1L << boardIndex);
+                this.placePiece(color, pieceType, boardIndex);
                 boardIndex++;
 
                 // Move to next rank
             } else if (currentChar == '/') {
-                boardIndex += boardIndex % 2 == 0 ? 0 : (8 - (boardIndex % 8));
+                boardIndex -= 16;
             } else {
                 throw new IllegalArgumentException("Invalid FEN character: " + currentChar);
             }
@@ -131,8 +142,27 @@ public class Board {
         this.fullmoveNumber = Integer.parseInt(fen.substring(fullmoveStart, runningIndex));
     }
 
+    public Map<String, Long> getNamedBitboards() {
+        Map<String, Long> named = new LinkedHashMap<>();
+        for (Color color : Color.values()) {
+            for (PieceType pieceType : PieceType.values()) {
+                if (pieceType == PieceType.EMPTY) {
+                    continue;
+                }
+                long bitboard = this.bitboards[color.ordinal()][pieceType.ordinal()];
+                named.put(color.name() + " " + pieceType.name(), bitboard);
+            }
+        }
+        named.put("Empty", this.bitboards[2][0]);
+        named.put("NONE", 0L);
+        return named;
+    }
+
     public long getBitboard(Color color, PieceType pieceType) {
-        return bitboards[color.ordinal()][pieceType.ordinal()];
+        if (pieceType == PieceType.EMPTY) {
+            return this.bitboards[2][0];
+        }
+        return this.bitboards[color.ordinal()][pieceType.ordinal()];
     }
 
 }

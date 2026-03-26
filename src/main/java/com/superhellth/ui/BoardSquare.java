@@ -18,15 +18,27 @@ public class BoardSquare extends Button {
 
     public BoardSquare(int file, int rank) {
         super();
+        this.file = file;
+        this.rank = rank;
+        this.pieceType = PieceType.EMPTY;
+        this.pieceColor = null;
 
         // Style
         this.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(file, rank) ? "white" : "beige"));
+        this.resetHighlight();
 
         // Logic
         this.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> {
             
         });
+    }
+
+    public void highlight() {
+        this.setStyle("-fx-background-color: red");
+    }
+
+    public void resetHighlight() {
+        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(this.file, this.rank) ? "white" : "beige"));
     }
 
     public void setPiece(PieceType pieceType, Color pieceColor) {

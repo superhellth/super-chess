@@ -3,6 +3,7 @@ package com.superhellth.ui;
 import com.superhellth.basics.Board;
 import com.superhellth.basics.Color;
 import com.superhellth.basics.PieceType;
+import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
 
 import javafx.scene.layout.ColumnConstraints;
@@ -38,6 +39,20 @@ public class BoardGrid extends GridPane {
         }
     }
 
+    public void visualizeBitboard(long bitboard) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                this.squares[i][j].resetHighlight();
+            }
+        }
+        for (int i : BitboardUtils.getPopulatedIndices(bitboard)) {
+            int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(i);
+            int file = rankAndFile[0];
+            int rank = rankAndFile[1];
+            this.squares[file][rank].highlight();
+        }
+    }
+
     private void setupPieces() {
         for (Color color : Color.values()) {
             for (PieceType pieceType : PieceType.values()) {
@@ -48,7 +63,7 @@ public class BoardGrid extends GridPane {
                 if (bitboard == 0) {
                     continue;
                 }
-                for (int i : BoardUtils.getPopulatedIndices(bitboard)) {
+                for (int i : BitboardUtils.getPopulatedIndices(bitboard)) {
                     int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(i);
                     int file = rankAndFile[0];
                     int rank = rankAndFile[1];
