@@ -7,6 +7,7 @@ import com.superhellth.utils.BoardUtils;
 import javafx.scene.control.Button;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.MouseEvent;
 
 public class BoardSquare extends Button {
 
@@ -17,9 +18,15 @@ public class BoardSquare extends Button {
 
     public BoardSquare(int file, int rank) {
         super();
+
+        // Style
         this.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(file, rank) ? "white" : "beige"));
-        // this.setStyle("-fx-font-color: red");
+
+        // Logic
+        this.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> {
+            
+        });
     }
 
     public void setPiece(PieceType pieceType, Color pieceColor) {
@@ -28,7 +35,7 @@ public class BoardSquare extends Button {
         if (pieceType != null && pieceType != PieceType.EMPTY) {
             String path = "/images/" + pieceColor.name().toLowerCase()
                     + "-" + pieceType.name().toLowerCase() + ".png";
-            Image image = new Image(getClass().getResourceAsStream(path));
+            Image image = new Image(getClass().getResourceAsStream(path), 120, 120, true, true);
             ImageView imageView = new ImageView(image);
             imageView.setPreserveRatio(true);
             imageView.fitWidthProperty().bind(this.widthProperty().multiply(0.8));
