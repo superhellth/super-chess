@@ -6,7 +6,6 @@ import com.superhellth.basics.Board;
 import com.superhellth.basics.Direction;
 import com.superhellth.basics.Game;
 import com.superhellth.basics.PseudoLegalMoveGenerator;
-import com.superhellth.basics.PseudoLegalMoveProvider;
 
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -25,14 +24,12 @@ public class MainWindow {
 
     private final Board board;
     private final PseudoLegalMoveGenerator moveGenerator;
-    private final PseudoLegalMoveProvider moveProvider;
     private final BoardGrid boardGrid;
 
     public MainWindow(Game game) {
         this.board = game.getBoard();
         this.moveGenerator = game.getMoveGenerator();
-        this.moveProvider = game.getMoveProvider();
-        this.boardGrid = new BoardGrid(this.board, this.moveProvider);
+        this.boardGrid = new BoardGrid(this.board, this.moveGenerator);
     }
 
     public void show(Stage stage) {
@@ -45,11 +42,8 @@ public class MainWindow {
             if (color == com.superhellth.basics.Color.EMPTY) {
                 continue;
             }
-            long[] pawnPushTargets = this.moveGenerator.getPawnPushTargets(color);
-            namedBitboards.put(color + " Pawn Single Push Targets", pawnPushTargets[0]);
-            namedBitboards.put(color + " Pawn Double Push Targets", pawnPushTargets[1]);
-            namedBitboards.put(color + " Pawn Attack Targets East", this.moveGenerator.getPawnAttackTargets(color, Direction.EAST));
-            namedBitboards.put(color + " Pawn Attack Targets West", this.moveGenerator.getPawnAttackTargets(color, Direction.WEST));
+            namedBitboards.put(color + " Pawn Push Targets", this.moveGenerator.getPawnPushTargets(color));
+            namedBitboards.put(color + " Pawn Attack Targets", this.moveGenerator.getPawnAttackTargets(color));
         }
         namedBitboards.put("None", 0L);
 

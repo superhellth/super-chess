@@ -4,7 +4,7 @@ import com.superhellth.basics.Board;
 import com.superhellth.basics.Color;
 import com.superhellth.basics.Direction;
 import com.superhellth.basics.PieceType;
-import com.superhellth.basics.PseudoLegalMoveProvider;
+import com.superhellth.basics.PseudoLegalMoveGenerator;
 import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
 
@@ -15,15 +15,15 @@ import javafx.scene.layout.RowConstraints;
 public class BoardGrid extends GridPane {
 
     private final Board board;
-    private final PseudoLegalMoveProvider moveProvider;
+    private final PseudoLegalMoveGenerator moveGenerator;
     private final BoardSquare[] squares = new BoardSquare[64];
     private BoardSquare selectedSquare = null;
     private long highlightedBitboard = 0L;
 
-    public BoardGrid(Board board, PseudoLegalMoveProvider moveProvider) {
+    public BoardGrid(Board board, PseudoLegalMoveGenerator moveGenerator) {
         super();
         this.board = board;
-        this.moveProvider = moveProvider;
+        this.moveGenerator = moveGenerator;
 
         // Initialize squares
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
@@ -88,7 +88,7 @@ public class BoardGrid extends GridPane {
             this.selectedSquare = null;
         } else {
             this.selectedSquare = square;
-            this.visualizeBitboard(this.moveProvider.getLegalMovesBitboard(square.getSquareIndex()));
+            this.visualizeBitboard(this.moveGenerator.getAllMovesBySquareBitboard(square.getSquareIndex()));
             square.highlight("red");
         }
     }
