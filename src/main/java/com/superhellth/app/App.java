@@ -1,6 +1,6 @@
 package com.superhellth.app;
 
-import com.superhellth.basics.Board;
+import com.superhellth.basics.Game;
 import com.superhellth.ui.MainWindow;
 
 import javafx.application.Application;
@@ -13,8 +13,8 @@ public class App extends Application {
 
     @Override   
       public void start(Stage stage) {
-          Board board = new Board();
-          MainWindow mainWindow = new MainWindow(board);
+          Game game = new Game();
+          MainWindow mainWindow = new MainWindow(game);
           mainWindow.show(stage);
       }
 

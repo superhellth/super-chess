@@ -1,5 +1,7 @@
 package com.superhellth.utils;
 
+import com.superhellth.basics.Direction;
+
 public class BitboardUtils {
 
     public static int[] getPopulatedIndices(long bitboard) {
@@ -12,12 +14,25 @@ public class BitboardUtils {
         return indices;
     }
 
-    public static long shiftNorth(long bitboard, int n) {
-        return bitboard << 8 * n;
-    }
-
-    public static long shiftSouth(long bitboard, int n) {
-        return bitboard >>> 8 * n;
+    public static long shift(long bitboard, Direction direction) {
+        return switch (direction) {
+            case NORTH ->
+                bitboard << 8;
+            case SOUTH ->
+                bitboard >>> 8;
+            case EAST ->
+                bitboard << 1 & 0xFEFEFEFEFEFEFEFEL;
+            case WEST ->
+                bitboard >>> 1 & 0x7F7F7F7F7F7F7F7FL;
+            case NORTH_EAST ->
+                (bitboard << 9) & 0xFEFEFEFEFEFEFEFEL;
+            case NORTH_WEST ->
+                (bitboard << 7) & 0x7F7F7F7F7F7F7F7FL;
+            case SOUTH_EAST ->
+                (bitboard >>> 7) & 0xFEFEFEFEFEFEFEFEL;
+            case SOUTH_WEST ->
+                (bitboard >>> 9) & 0x7F7F7F7F7F7F7F7FL;
+        };
     }
 
 }

@@ -6,9 +6,12 @@ import java.util.Map;
 public class Board {
 
     private static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    private static final String TEST_FEN = "8/8/8/2k5/4K3/8/8/8 w - - 0 1";
+    private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
     private Color activeColor;
-    private long[][] bitboards;
+    private long[][] pieceBitboards;
+    private long[] occupancyBitboards; // [white, black, empty]
+    private Color[] squareColors; // Precomputed colors for each square
+    private PieceType[] squarePieceTypes; // Precomputed piece types for each square
     private boolean[] castlingRights; // [white kingside, white queenside, black kingside, black queenside]
     private int enPassantSquare; // -1 if no en passant square
     private int halfmoveClock;
@@ -16,33 +19,79 @@ public class Board {
 
     public Board() {
         this.activeColor = Color.WHITE;
-        this.bitboards = new long[3][6];
-        this.castlingRights = new boolean[4];
-        this.enPassantSquare = -1;
-        this.halfmoveClock = 0;
-        this.fullmoveNumber = 1;
-        this.bitboards[2][0] = -1L;
+        this.pieceBitboards = new long[2][6];
+        this.occupancyBitboards = new long[3];
+        this.squareColors = new Color[64];
+        this.squarePieceTypes = new PieceType[64];
 
+        this.castlingRights = new boolean[4];
+
+        this.resetBoard();
         this.loadFromFEN(Board.TEST_FEN);
     }
 
     private void placePiece(Color color, PieceType pieceType, int square) {
-        this.bitboards[color.ordinal()][pieceType.ordinal()] |= (1L << square);
-        this.bitboards[2][0] &= ~(1L << square);
+        this.pieceBitboards[color.ordinal()][pieceType.ordinal()] |= (1L << square);
+        this.occupancyBitboards[color.ordinal()] |= (1L << square);
+        this.occupancyBitboards[Color.EMPTY.ordinal()] &= ~(1L << square);
+        this.squareColors[square] = color;
+        this.squarePieceTypes[square] = pieceType;
     }
 
     public void resetBoard() {
+        // shouldnt i just recreate the bitboards here?
         for (int i = 0; i < 2; i++) {
+            this.occupancyBitboards[i] = 0L;
             for (int j = 0; j < 6; j++) {
-                this.bitboards[i][j] = 0L;
+                this.pieceBitboards[i][j] = 0L;
             }
         }
-        this.bitboards[2][0] = -1L;
+        this.occupancyBitboards[2] = -1L;
+        this.squareColors = new Color[64];
+        this.squarePieceTypes = new PieceType[64];
         this.activeColor = Color.WHITE;
         this.castlingRights = new boolean[4];
         this.enPassantSquare = -1;
         this.halfmoveClock = 0;
         this.fullmoveNumber = 1;
+    }
+
+    public long getOccupancyBitboard(Color color) {
+        return this.occupancyBitboards[color.ordinal()];
+    }
+
+    public long getPieceBitboard(Color color, PieceType pieceType) {
+        assert color != Color.EMPTY : "Color cannot be EMPTY when getting piece bitboard";
+        if (pieceType == PieceType.EMPTY) {
+            return ~this.occupancyBitboards[color.ordinal()];
+        }
+        return this.pieceBitboards[color.ordinal()][pieceType.ordinal()];
+    }
+
+    public Map<String, Long> getNamedBitboards() {
+        Map<String, Long> named = new LinkedHashMap<>();
+        for (Color color : Color.values()) {
+            named.put(color.name(), this.occupancyBitboards[color.ordinal()]);
+            if (color == Color.EMPTY) {
+                continue;
+            }
+            for (PieceType pieceType : PieceType.values()) {
+                if (pieceType == PieceType.EMPTY) {
+                    continue;
+                }
+                long bitboard = this.pieceBitboards[color.ordinal()][pieceType.ordinal()];
+                named.put(color.name() + " " + pieceType.name(), bitboard);
+            }
+        }
+        return named;
+    }
+
+    public Color getSquareColor(int square) {
+        return this.squareColors[square];
+    }
+
+    public PieceType getSquarePieceType(int square) {
+        return this.squarePieceTypes[square];
     }
 
     public void loadFromFEN(String fen) {
@@ -140,29 +189,6 @@ public class Board {
             runningIndex++;
         }
         this.fullmoveNumber = Integer.parseInt(fen.substring(fullmoveStart, runningIndex));
-    }
-
-    public Map<String, Long> getNamedBitboards() {
-        Map<String, Long> named = new LinkedHashMap<>();
-        for (Color color : Color.values()) {
-            for (PieceType pieceType : PieceType.values()) {
-                if (pieceType == PieceType.EMPTY) {
-                    continue;
-                }
-                long bitboard = this.bitboards[color.ordinal()][pieceType.ordinal()];
-                named.put(color.name() + " " + pieceType.name(), bitboard);
-            }
-        }
-        named.put("Empty", this.bitboards[2][0]);
-        named.put("NONE", 0L);
-        return named;
-    }
-
-    public long getBitboard(Color color, PieceType pieceType) {
-        if (pieceType == PieceType.EMPTY) {
-            return this.bitboards[2][0];
-        }
-        return this.bitboards[color.ordinal()][pieceType.ordinal()];
     }
 
 }

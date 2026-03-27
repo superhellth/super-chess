@@ -1,5 +1,7 @@
 package com.superhellth.ui;
 
+import java.util.function.Consumer;
+
 import com.superhellth.basics.Color;
 import com.superhellth.basics.PieceType;
 import com.superhellth.utils.BoardUtils;
@@ -11,17 +13,17 @@ import javafx.scene.input.MouseEvent;
 
 public class BoardSquare extends Button {
 
-    private int file;
-    private int rank;
+    private final int squareIndex;
     private PieceType pieceType;
     private Color pieceColor;
+    private Consumer<BoardSquare> onClickCallback;
 
-    public BoardSquare(int file, int rank) {
+    public BoardSquare(int squareIndex, Consumer<BoardSquare> onClickCallback) {
         super();
-        this.file = file;
-        this.rank = rank;
+        this.squareIndex = squareIndex;
         this.pieceType = PieceType.EMPTY;
-        this.pieceColor = null;
+        this.pieceColor = Color.EMPTY;
+        this.onClickCallback = onClickCallback;
 
         // Style
         this.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
@@ -29,22 +31,24 @@ public class BoardSquare extends Button {
 
         // Logic
         this.addEventHandler(MouseEvent.MOUSE_CLICKED, event -> {
-            
+            if (this.onClickCallback != null) {
+                this.onClickCallback.accept(this);
+            }
         });
     }
 
-    public void highlight() {
-        this.setStyle("-fx-background-color: red");
+    public void highlight(String color) {
+        this.setStyle("-fx-background-color: " + color);
     }
 
     public void resetHighlight() {
-        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(this.file, this.rank) ? "white" : "beige"));
+        this.setStyle("-fx-background-color: " + (BoardUtils.isLightSquare(this.squareIndex) ? "white" : "beige"));
     }
 
     public void setPiece(PieceType pieceType, Color pieceColor) {
         this.pieceType = pieceType;
         this.pieceColor = pieceColor;
-        if (pieceType != null && pieceType != PieceType.EMPTY) {
+        if (pieceColor != Color.EMPTY && pieceType != PieceType.EMPTY) {
             String path = "/images/" + pieceColor.name().toLowerCase()
                     + "-" + pieceType.name().toLowerCase() + ".png";
             Image image = new Image(getClass().getResourceAsStream(path), 120, 120, true, true);
@@ -58,6 +62,18 @@ public class BoardSquare extends Button {
             this.setGraphic(null);
             this.setText("");
         }
+    }
+
+    public Color getPieceColor() {
+        return this.pieceColor;
+    }
+
+    public PieceType getPieceType() {
+        return this.pieceType;
+    }
+
+    public int getSquareIndex() {
+        return this.squareIndex;
     }
 
 }
