@@ -42,8 +42,8 @@ public class MainWindow {
             if (color == com.superhellth.basics.Color.EMPTY) {
                 continue;
             }
-            namedBitboards.put(color + " Pawn Push Targets", this.moveGenerator.getPawnPushTargets(color));
-            namedBitboards.put(color + " Pawn Attack Targets", this.moveGenerator.getPawnAttackTargets(color));
+            // namedBitboards.put(color + " Pawn Push Targets", this.moveGenerator.getPawnPushTargets(color));
+            // namedBitboards.put(color + " Pawn Attack Targets", this.moveGenerator.getPawnAttackTargets(color));
         }
         namedBitboards.put("None", 0L);
 

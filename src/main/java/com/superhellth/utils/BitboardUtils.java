@@ -35,4 +35,14 @@ public class BitboardUtils {
         };
     }
 
+    public static long flood(long population, long empty, Direction direction) {
+        // call by ref / value?
+        long flood = 0L;
+        while (population != 0) {
+            flood |= population;
+            population = (population >> 8) & empty;
+        }
+        return flood;
+    }
+
 }

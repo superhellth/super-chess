@@ -1,41 +1,54 @@
 package com.superhellth.basics;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
 
 public class PseudoLegalMoveGenerator {
 
+    // Lookup tables
     public static final long[] KNIGHT_ATTACKS = new long[64];
+    public static final long[] KING_ATTACKS = new long[64];
 
+    // Logic
     private final Board board;
     private List<Move> allMoves;
-    private List<Move>[] movesByColor;
-    private final long[] pawnPushTargets = new long[2]; // 0 white, 1 black
-    private final long[] pawnAttackTargets = new long[2]; // 0 white, 1 black
+    private Map<Color, List<Move>> movesByColor;
+
+    // Attack bitboards: 0 white, 1 black
+    private final Map<PieceType, Long[]> attackBitboards;
 
     public PseudoLegalMoveGenerator(Board board) {
         this.board = board;
+        this.attackBitboards = new HashMap<>();
+        for (PieceType type : PieceType.values()) {
+            if (type == PieceType.EMPTY) {
+                continue;
+            }
+            this.attackBitboards.put(type, new Long[2]);
+        }
+
         PseudoLegalMoveGenerator.initializeKnightAttacks();
+        PseudoLegalMoveGenerator.initializeKingAttacks();
     }
 
-    public static void initializeKnightAttacks() {
-        for (int square = 0; square < 64; square++) {
-            long knightBitboard = 1L << square;
-            long attacks = 0L;
-
-            attacks |= (knightBitboard << 17) & 0xFEFEFEFEFEFEFEFEL;
-            attacks |= (knightBitboard << 15) & 0x7F7F7F7F7F7F7F7FL;
-            // ...
-
-            KNIGHT_ATTACKS[square] = attacks;
+    public void resetAttackBitboards() {
+        for (PieceType type : PieceType.values()) {
+            if (type == PieceType.EMPTY) {
+                continue;
+            }
+            this.attackBitboards.get(type)[0] = 0L;
+            this.attackBitboards.get(type)[1] = 0L;
         }
     }
 
     public List<Move> generateAllMoves() {
         this.allMoves = new ArrayList<>();
+        this.movesByColor = new HashMap<>();
         this.allMoves.addAll(this.generateAllMovesByColor(Color.WHITE));
         this.allMoves.addAll(this.generateAllMovesByColor(Color.BLACK));
         return this.allMoves;
@@ -43,9 +56,11 @@ public class PseudoLegalMoveGenerator {
 
     public List<Move> generateAllMovesByColor(Color color) {
         assert color != Color.EMPTY : "Color cannot be EMPTY when getting legal moves by color";
-        this.movesByColor[color.ordinal()] = new ArrayList<>();
-        this.movesByColor[color.ordinal()].addAll(this.generatePawnMoves(color));
-        return this.movesByColor[color.ordinal()];
+        this.movesByColor.put(color, new ArrayList<>());
+        this.movesByColor.get(color).addAll(this.generatePawnMoves(color));
+        this.movesByColor.get(color).addAll(this.generateKnightMoves(color));
+        this.movesByColor.get(color).addAll(this.generateKingMoves(color));
+        return this.movesByColor.get(color);
     }
 
     // Getters for moves by square
@@ -62,18 +77,14 @@ public class PseudoLegalMoveGenerator {
     }
 
     // Bitboard getters for UI visualization
-    public long getPawnPushTargets(Color color) {
-        assert color != Color.EMPTY : "Color cannot be EMPTY when getting pawn push targets";
-        return this.pawnPushTargets[color.ordinal()];
+    public long getAttackBitboard(PieceType type, Color color) {
+        assert type != PieceType.EMPTY && color != Color.EMPTY : "Type and color cannot be EMPTY when getting attack bitboards";
+        return this.attackBitboards.get(type)[color.ordinal()];
     }
 
-    public long getPawnAttackTargets(Color color) {
-        assert color != Color.EMPTY : "Color cannot be EMPTY when getting pawn attack targets";
-        return this.pawnAttackTargets[color.ordinal()];
-    }
-
+    // Move generation
     private List<Move> generatePawnMoves(Color color) {
-        assert color != Color.EMPTY : "Color cannot be EMPTY when generating pawn push targets";
+        assert color != Color.EMPTY : "Color cannot be EMPTY when generating pawn moves";
 
         // Prepare bitboards
         long pawnBitboard = board.getPieceBitboard(color, PieceType.PAWN);
@@ -83,10 +94,9 @@ public class PseudoLegalMoveGenerator {
         // Generate targets
         long singlePushTargets = generateSinglePushTargets(color, pawnBitboard, emptyBitboard);
         long doublePushTargets = generateDoublePushTargets(color, singlePushTargets, emptyBitboard);
-        this.pawnPushTargets[color.ordinal()] = singlePushTargets | doublePushTargets;
         long eastAttacks = generatePawnAttacks(color, Direction.EAST, pawnBitboard, oppositeColorBitboard);
         long westAttacks = generatePawnAttacks(color, Direction.WEST, pawnBitboard, oppositeColorBitboard);
-        this.pawnAttackTargets[color.ordinal()] = eastAttacks | westAttacks;
+        this.attackBitboards.get(PieceType.PAWN)[color.ordinal()] = eastAttacks | westAttacks;
 
         // Extract moves from targets
         List<Move> moves = new ArrayList<>();
@@ -98,25 +108,56 @@ public class PseudoLegalMoveGenerator {
         return moves;
     }
 
-    // private void generateKnightMoves(long knightBitboard, long occupancyBitboard) {
-    //     long knightsToProcess = knightBitboard;
+    private List<Move> generateKnightMoves(Color color) {
+        assert color != Color.EMPTY : "Color cannot be EMPTY when generating knight moves";
+        long knightBitboard = this.board.getPieceBitboard(color, PieceType.KNIGHT);
+        long occupancyBitboard = this.board.getOccupancyBitboard(color);
 
-    //     while (knightsToProcess != 0L) {
-    //         int fromSquare = Long.numberOfTrailingZeros(knightsToProcess);
-    //         long validMoves = KNIGHT_ATTACKS[fromSquare] & ~occupancyBitboard;
+        List<Move> knightMoves = new ArrayList<>();
+        long knightsToProcess = knightBitboard;
+        while (knightsToProcess != 0L) {
+            int fromSquare = Long.numberOfTrailingZeros(knightsToProcess);
+            long validMoves = KNIGHT_ATTACKS[fromSquare] & ~occupancyBitboard;
+            this.attackBitboards.get(PieceType.KNIGHT)[color.ordinal()] |= validMoves;
 
-    //         while (validMoves != 0L) {
-    //             int toSquare = Long.numberOfTrailingZeros(validMoves);
-    //             moveList.add(new Move(fromSquare, toSquare));
+            while (validMoves != 0L) {
+                int toSquare = Long.numberOfTrailingZeros(validMoves);
+                knightMoves.add(new Move(fromSquare, toSquare));
+                validMoves &= validMoves - 1L;
+            }
+            knightsToProcess &= knightsToProcess - 1L;
+        }
 
-    //             // Clear the bit to process the next destination
-    //             validMoves &= validMoves - 1L;
-    //         }
+        return knightMoves;
+    }
 
-    //         // 4. Clear the processed knight to find the next one
-    //         knightsToProcess &= knightsToProcess - 1L;
-    //     }
-    // }
+    private List<Move> generateKingMoves(Color color) {
+        long kingBitboard = this.board.getPieceBitboard(color, PieceType.KING);
+        long occupancyBitboard = this.board.getOccupancyBitboard(color);
+
+        List<Move> kingMoves = new ArrayList<>();
+        int fromSquare = Long.numberOfTrailingZeros(kingBitboard);
+        if (fromSquare < 64) {
+            long validMoves = KING_ATTACKS[fromSquare] & ~occupancyBitboard;
+            this.attackBitboards.get(PieceType.KING)[color.ordinal()] |= validMoves;
+            while (validMoves != 0L) {
+                int toSquare = Long.numberOfTrailingZeros(validMoves);
+                kingMoves.add(new Move(fromSquare, toSquare));
+                validMoves &= validMoves - 1L;
+            }
+        }
+        return kingMoves;
+    }
+
+    private List<Move> generateRookMoves(Color color) {
+        long queenBitboard = this.board.getPieceBitboard(color, PieceType.ROOK);
+        long emptyBitboard = this.board.getOccupancyBitboard(Color.EMPTY);
+        Map<Direction, Long> attackBitboardByDirection = new HashMap<>();
+        for (Direction direction : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+            attackBitboardByDirection.put(direction, BitboardUtils.flood(queenBitboard, emptyBitboard, direction));
+        }
+
+    }
 
     private long generatePawnAttacks(Color color, Direction direction, long pawnBitboard, long oppositeColorBitboard) {
         long attacks;
@@ -153,5 +194,48 @@ public class PseudoLegalMoveGenerator {
             bitboard &= bitboard - 1;
         }
         return moves;
+    }
+
+    private static void initializeKnightAttacks() {
+        for (int square = 0; square < 64; square++) {
+            long knightBitboard = 1L << square;
+            long attacks = 0L;
+
+            // Up-left, up-right (two ranks up, one file left/right)
+            attacks |= (knightBitboard << 15) & 0x7F7F7F7F7F7F7F7FL;
+            attacks |= (knightBitboard << 17) & 0xFEFEFEFEFEFEFEFEL;
+            // Right-up, right-down (two files right, one rank up/down)
+            attacks |= (knightBitboard << 10) & 0xFCFCFCFCFCFCFCFCL;
+            attacks |= (knightBitboard >>> 6) & 0xFCFCFCFCFCFCFCFCL;
+            // Left-up, left-down (two files left, one rank up/down)
+            attacks |= (knightBitboard << 6) & 0x3F3F3F3F3F3F3F3FL;
+            attacks |= (knightBitboard >>> 10) & 0x3F3F3F3F3F3F3F3FL;
+            // Down-left, down-right (two ranks down, one file left/right)
+            attacks |= (knightBitboard >>> 17) & 0x7F7F7F7F7F7F7F7FL;
+            attacks |= (knightBitboard >>> 15) & 0xFEFEFEFEFEFEFEFEL;
+
+            KNIGHT_ATTACKS[square] = attacks;
+        }
+    }
+
+    private static void initializeKingAttacks() {
+        for (int square = 0; square < 64; square++) {
+            long kingBitboard = 1L << square;
+            long attacks = 0L;
+
+            // Vertical (north, south)
+            attacks |= (kingBitboard << 8);
+            attacks |= (kingBitboard >>> 8);
+            // Horizontal (east, west)
+            attacks |= (kingBitboard << 1) & 0xFEFEFEFEFEFEFEFEL;
+            attacks |= (kingBitboard >>> 1) & 0x7F7F7F7F7F7F7F7FL;
+            // Diagonals (NE, NW, SE, SW)
+            attacks |= (kingBitboard << 9) & 0xFEFEFEFEFEFEFEFEL;
+            attacks |= (kingBitboard << 7) & 0x7F7F7F7F7F7F7F7FL;
+            attacks |= (kingBitboard >>> 7) & 0xFEFEFEFEFEFEFEFEL;
+            attacks |= (kingBitboard >>> 9) & 0x7F7F7F7F7F7F7F7FL;
+
+            KING_ATTACKS[square] = attacks;
+        }
     }
 }
