@@ -40,7 +40,7 @@ public class BitboardUtils {
         long flood = 0L;
         while (population != 0) {
             flood |= population;
-            population = (population >> 8) & empty;
+            population = shift(population, direction) & empty;
         }
         return flood;
     }

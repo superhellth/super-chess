@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
+import com.superhellth.utils.MagicConstants;
 
 public class PseudoLegalMoveGenerator {
 
@@ -150,13 +151,17 @@ public class PseudoLegalMoveGenerator {
     }
 
     private List<Move> generateRookMoves(Color color) {
-        long queenBitboard = this.board.getPieceBitboard(color, PieceType.ROOK);
-        long emptyBitboard = this.board.getOccupancyBitboard(Color.EMPTY);
-        Map<Direction, Long> attackBitboardByDirection = new HashMap<>();
-        for (Direction direction : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
-            attackBitboardByDirection.put(direction, BitboardUtils.flood(queenBitboard, emptyBitboard, direction));
+        long rookBitboard = this.board.getPieceBitboard(color, PieceType.ROOK);
+        long occupancyBitboard = ~this.board.getOccupancyBitboard(Color.EMPTY);
+        while (rookBitboard != 0) {
+            int squareIndex = Long.numberOfTrailingZeros(rookBitboard);
+            long occupancy = occupancyBitboard & MagicConstants.ROOK_MASKS[squareIndex];
+            int index = (int) ((occupancy * MagicConstants.ROOK_MAGICS[squareIndex]) >>> (64 - MagicConstants.ROOK_SHIFTS[squareIndex]));
+            long attacks = MagicConstants.ROOK_TABLE[squareIndex][index];
+            rookBitboard &= rookBitboard - 1;
         }
 
+        return 
     }
 
     private long generatePawnAttacks(Color color, Direction direction, long pawnBitboard, long oppositeColorBitboard) {
