@@ -113,6 +113,14 @@ public class Board {
         return this.squarePieceTypes[square];
     }
 
+    public Color getActiveColor() {
+        return this.activeColor;
+    }
+
+    public void setActiveColor(Color color) {
+        this.activeColor = color;
+    }
+
     public void loadFromFEN(String fen) {
         this.resetBoard();
 

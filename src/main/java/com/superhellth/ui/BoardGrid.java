@@ -6,7 +6,6 @@ import com.superhellth.basics.Direction;
 import com.superhellth.basics.Game;
 import com.superhellth.basics.Move;
 import com.superhellth.basics.PieceType;
-import com.superhellth.basics.PseudoLegalMoveGenerator;
 import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
 
@@ -18,7 +17,6 @@ public class BoardGrid extends GridPane {
 
     private final Game game;
     private final Board board;
-    private final PseudoLegalMoveGenerator moveGenerator;
     private final BoardSquare[] squares = new BoardSquare[64];
     private BoardSquare selectedSquare = null;
     private long highlightedBitboard = 0L;
@@ -27,7 +25,6 @@ public class BoardGrid extends GridPane {
         super();
         this.game = game;
         this.board = game.getBoard();
-        this.moveGenerator = game.getMoveGenerator();
 
         // Initialize squares
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
@@ -90,7 +87,7 @@ public class BoardGrid extends GridPane {
             this.loadBoard();
         } else  {
             this.selectedSquare = square;
-            for (Move move : this.moveGenerator.getAllMovesBySquareList(squareIndex)) {
+            for (Move move : this.game.getPseudoLegalMovesFromSquare(squareIndex)) {
                 int targetSquareIndex = move.getToSquare();
                 this.squares[targetSquareIndex].setTargetMove(move);
             }
