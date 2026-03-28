@@ -7,11 +7,12 @@ public class Board {
 
     private static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
+
+    private final long[][] pieceBitboards;
+    private final long[] occupancyBitboards; // [white, black, empty]
+    private final Color[] squareColors; // Precomputed colors for each square
+    private final PieceType[] squarePieceTypes; // Precomputed piece types for each square
     private Color activeColor;
-    private long[][] pieceBitboards;
-    private long[] occupancyBitboards; // [white, black, empty]
-    private Color[] squareColors; // Precomputed colors for each square
-    private PieceType[] squarePieceTypes; // Precomputed piece types for each square
     private boolean[] castlingRights; // [white kingside, white queenside, black kingside, black queenside]
     private int enPassantSquare; // -1 if no en passant square
     private int halfmoveClock;
@@ -30,12 +31,28 @@ public class Board {
         this.loadFromFEN(Board.TEST_FEN);
     }
 
-    private void placePiece(Color color, PieceType pieceType, int square) {
+    public void placePiece(Color color, PieceType pieceType, int square) {
         this.pieceBitboards[color.ordinal()][pieceType.ordinal()] |= (1L << square);
         this.occupancyBitboards[color.ordinal()] |= (1L << square);
         this.occupancyBitboards[Color.EMPTY.ordinal()] &= ~(1L << square);
         this.squareColors[square] = color;
         this.squarePieceTypes[square] = pieceType;
+    }
+
+    public void removePiece(int square) {
+        Color color = this.squareColors[square];
+        PieceType pieceType = this.squarePieceTypes[square];
+        if ((color == Color.EMPTY && pieceType != PieceType.EMPTY) || (color != Color.EMPTY && pieceType == PieceType.EMPTY)) {
+            throw new RuntimeException("Piece on empty field / Piece without color!");
+        } 
+        if (color == Color.EMPTY && pieceType == PieceType.EMPTY) {
+            return;
+        }
+        this.pieceBitboards[color.ordinal()][pieceType.ordinal()] &= ~(1L << square);
+        this.occupancyBitboards[color.ordinal()] &= ~(1L << square);
+        this.occupancyBitboards[Color.EMPTY.ordinal()] |= (1L << square);
+        this.squareColors[square] = Color.EMPTY;
+        this.squarePieceTypes[square] = PieceType.EMPTY;
     }
 
     public void resetBoard() {
@@ -47,8 +64,10 @@ public class Board {
             }
         }
         this.occupancyBitboards[2] = -1L;
-        this.squareColors = new Color[64];
-        this.squarePieceTypes = new PieceType[64];
+        for (int i = 0; i < 64; i++) {
+            this.squareColors[i] = Color.EMPTY;
+            this.squarePieceTypes[i] = PieceType.EMPTY;
+        }
         this.activeColor = Color.WHITE;
         this.castlingRights = new boolean[4];
         this.enPassantSquare = -1;

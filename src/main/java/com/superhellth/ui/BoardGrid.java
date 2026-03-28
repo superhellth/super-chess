@@ -3,6 +3,8 @@ package com.superhellth.ui;
 import com.superhellth.basics.Board;
 import com.superhellth.basics.Color;
 import com.superhellth.basics.Direction;
+import com.superhellth.basics.Game;
+import com.superhellth.basics.Move;
 import com.superhellth.basics.PieceType;
 import com.superhellth.basics.PseudoLegalMoveGenerator;
 import com.superhellth.utils.BitboardUtils;
@@ -14,16 +16,18 @@ import javafx.scene.layout.RowConstraints;
 
 public class BoardGrid extends GridPane {
 
+    private final Game game;
     private final Board board;
     private final PseudoLegalMoveGenerator moveGenerator;
     private final BoardSquare[] squares = new BoardSquare[64];
     private BoardSquare selectedSquare = null;
     private long highlightedBitboard = 0L;
 
-    public BoardGrid(Board board, PseudoLegalMoveGenerator moveGenerator) {
+    public BoardGrid(Game game) {
         super();
-        this.board = board;
-        this.moveGenerator = moveGenerator;
+        this.game = game;
+        this.board = game.getBoard();
+        this.moveGenerator = game.getMoveGenerator();
 
         // Initialize squares
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
@@ -31,7 +35,7 @@ public class BoardGrid extends GridPane {
             int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(squareIndex);
             this.add(this.squares[squareIndex], rankAndFile[0], rankAndFile[1]);
         }
-        this.setupPieces();
+        this.loadBoard();
 
         // Styling
         for (int i = 0; i < 8; i++) {
@@ -62,34 +66,41 @@ public class BoardGrid extends GridPane {
         }
     }
 
-    private void setupPieces() {
-        for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
-            for (PieceType pieceType : PieceType.values()) {
-                if (pieceType == PieceType.EMPTY) {
-                    continue;
-                }
-                long bitboard = this.board.getPieceBitboard(color, pieceType);
-                if (bitboard == 0) {
-                    continue;
-                }
-                for (int i : BitboardUtils.getPopulatedIndices(bitboard)) {
-                    this.squares[i].setPiece(pieceType, color);
-                }
-            }
+    private void loadBoard() {
+        for (int i = 0; i < 64; i++) {
+            PieceType pieceType = this.board.getSquarePieceType(i);
+            Color pieceColor = this.board.getSquareColor(i);
+            this.squares[i].setPiece(pieceType, pieceColor);
         }
     }
 
     private void handleSquareClick(BoardSquare square) {
+        int squareIndex = square.getSquareIndex();
+        Move squareTargetMove = square.getTargetMove();
+
         if (this.selectedSquare != null) {
             this.selectedSquare.resetHighlight();
+            this.resetAllTargetMoves();
         }
 
         if (this.selectedSquare == square) {
             this.selectedSquare = null;
-        } else {
+        } else if (squareTargetMove != null) {
+            this.game.executeMove(squareTargetMove);
+            this.loadBoard();
+        } else  {
             this.selectedSquare = square;
-            this.visualizeBitboard(this.moveGenerator.getAllMovesBySquareBitboard(square.getSquareIndex()));
+            for (Move move : this.moveGenerator.getAllMovesBySquareList(squareIndex)) {
+                int targetSquareIndex = move.getToSquare();
+                this.squares[targetSquareIndex].setTargetMove(move);
+            }
             square.highlight("red");
+        }
+    }
+
+    private void resetAllTargetMoves() {
+        for (int i = 0; i < 64; i++) {
+            this.squares[i].setTargetMove(null);
         }
     }
 

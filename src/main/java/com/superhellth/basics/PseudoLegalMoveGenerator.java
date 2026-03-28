@@ -30,8 +30,10 @@ public class PseudoLegalMoveGenerator {
             if (type == PieceType.EMPTY) {
                 continue;
             }
-            this.attackBitboards.put(type, new Long[2]);
+            // System.out.println("Setting attack bitboard for type " + type);
+            this.attackBitboards.put(type, new Long[]{0L, 0L});
         }
+        // System.out.println(this.attackBitboards.get(PieceType.KNIGHT)[0]);
 
         PseudoLegalMoveGenerator.initializeKnightAttacks();
         PseudoLegalMoveGenerator.initializeKingAttacks();
@@ -48,6 +50,7 @@ public class PseudoLegalMoveGenerator {
     }
 
     public List<Move> generateAllMoves() {
+        this.resetAttackBitboards();
         this.allMoves = new ArrayList<>();
         this.movesByColor = new HashMap<>();
         this.allMoves.addAll(this.generateAllMovesByColor(Color.WHITE));
@@ -61,6 +64,7 @@ public class PseudoLegalMoveGenerator {
         this.movesByColor.get(color).addAll(this.generatePawnMoves(color));
         this.movesByColor.get(color).addAll(this.generateKnightMoves(color));
         this.movesByColor.get(color).addAll(this.generateKingMoves(color));
+        this.movesByColor.get(color).addAll(this.generateRookMoves(color));
         return this.movesByColor.get(color);
     }
 
@@ -153,15 +157,25 @@ public class PseudoLegalMoveGenerator {
     private List<Move> generateRookMoves(Color color) {
         long rookBitboard = this.board.getPieceBitboard(color, PieceType.ROOK);
         long occupancyBitboard = ~this.board.getOccupancyBitboard(Color.EMPTY);
+        long sameColorBitboard = this.board.getOccupancyBitboard(color);
+        long oppositeColorBitboard = this.board.getOccupancyBitboard(BoardUtils.getOppositeColor(color));
+
+        List<Move> rookMoves = new ArrayList<>();
         while (rookBitboard != 0) {
             int squareIndex = Long.numberOfTrailingZeros(rookBitboard);
             long occupancy = occupancyBitboard & MagicConstants.ROOK_MASKS[squareIndex];
             int index = (int) ((occupancy * MagicConstants.ROOK_MAGICS[squareIndex]) >>> (64 - MagicConstants.ROOK_SHIFTS[squareIndex]));
-            long attacks = MagicConstants.ROOK_TABLE[squareIndex][index];
+            long range = MagicConstants.ROOK_TABLE[squareIndex][index];
+            long legalTargets = range & ~sameColorBitboard;
+            long attacks = legalTargets & oppositeColorBitboard;
+            this.attackBitboards.get(PieceType.ROOK)[color.ordinal()] |= attacks;
+            for (int targetSquare : BitboardUtils.getPopulatedIndices(legalTargets)) {
+                rookMoves.add(new Move(squareIndex, targetSquare));
+            }
             rookBitboard &= rookBitboard - 1;
         }
 
-        return 
+        return rookMoves;
     }
 
     private long generatePawnAttacks(Color color, Direction direction, long pawnBitboard, long oppositeColorBitboard) {

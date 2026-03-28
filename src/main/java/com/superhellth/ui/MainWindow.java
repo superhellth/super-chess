@@ -29,7 +29,7 @@ public class MainWindow {
     public MainWindow(Game game) {
         this.board = game.getBoard();
         this.moveGenerator = game.getMoveGenerator();
-        this.boardGrid = new BoardGrid(this.board, this.moveGenerator);
+        this.boardGrid = new BoardGrid(game);
     }
 
     public void show(Stage stage) {

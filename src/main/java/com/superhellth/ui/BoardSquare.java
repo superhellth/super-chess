@@ -3,6 +3,7 @@ package com.superhellth.ui;
 import java.util.function.Consumer;
 
 import com.superhellth.basics.Color;
+import com.superhellth.basics.Move;
 import com.superhellth.basics.PieceType;
 import com.superhellth.utils.BoardUtils;
 
@@ -16,6 +17,7 @@ public class BoardSquare extends Button {
     private final int squareIndex;
     private PieceType pieceType;
     private Color pieceColor;
+    private Move targetMove;
     private Consumer<BoardSquare> onClickCallback;
 
     public BoardSquare(int squareIndex, Consumer<BoardSquare> onClickCallback) {
@@ -46,6 +48,7 @@ public class BoardSquare extends Button {
     }
 
     public void setPiece(PieceType pieceType, Color pieceColor) {
+        assert (pieceColor == Color.EMPTY && pieceType == PieceType.EMPTY) || (pieceColor != Color.EMPTY && pieceType != PieceType.EMPTY) : "Piece wo color / empty square w piece detected";
         this.pieceType = pieceType;
         this.pieceColor = pieceColor;
         if (pieceColor != Color.EMPTY && pieceType != PieceType.EMPTY) {
@@ -74,6 +77,19 @@ public class BoardSquare extends Button {
 
     public int getSquareIndex() {
         return this.squareIndex;
+    }
+
+    public void setTargetMove(Move move) {
+        if (move == null) {
+            this.resetHighlight();
+        } else {
+            this.highlight("green");
+        }
+        this.targetMove = move;
+    }
+
+    public Move getTargetMove() {
+        return this.targetMove;
     }
 
 }
