@@ -1,8 +1,5 @@
 package com.superhellth.basics;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 public class Board {
 
     public static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -44,7 +41,7 @@ public class Board {
         PieceType pieceType = this.squarePieceTypes[square];
         if ((color == Color.EMPTY && pieceType != PieceType.EMPTY) || (color != Color.EMPTY && pieceType == PieceType.EMPTY)) {
             throw new RuntimeException("Piece on empty field / Piece without color!");
-        } 
+        }
         if (color == Color.EMPTY && pieceType == PieceType.EMPTY) {
             return;
         }
@@ -87,30 +84,24 @@ public class Board {
         return this.pieceBitboards[color.ordinal()][pieceType.ordinal()];
     }
 
-    public Map<String, Long> getNamedBitboards() {
-        Map<String, Long> named = new LinkedHashMap<>();
-        for (Color color : Color.values()) {
-            named.put(color.name(), this.occupancyBitboards[color.ordinal()]);
-            if (color == Color.EMPTY) {
-                continue;
-            }
-            for (PieceType pieceType : PieceType.values()) {
-                if (pieceType == PieceType.EMPTY) {
-                    continue;
-                }
-                long bitboard = this.pieceBitboards[color.ordinal()][pieceType.ordinal()];
-                named.put(color.name() + " " + pieceType.name(), bitboard);
-            }
-        }
-        return named;
-    }
-
     public Color getSquareColor(int square) {
         return this.squareColors[square];
     }
 
     public PieceType getSquarePieceType(int square) {
         return this.squarePieceTypes[square];
+    }
+
+    // 0 kingside, 1 queenside
+    public boolean[] getCastlingRights(Color color) {
+        assert color != Color.EMPTY : "EMPTY has no castlig rights";
+        return color == Color.WHITE ? new boolean[]{this.castlingRights[0], this.castlingRights[1]} : new boolean[]{this.castlingRights[2], this.castlingRights[3]};
+    }
+
+    // 0 kingside, 1 queenside
+    public void revokeCastlingRight(Color color, int side) {
+        assert color != Color.EMPTY : "EMPTY has no castlig rights";
+        this.castlingRights[color == Color.WHITE ? side : 2 + side] = false;
     }
 
     public Color getActiveColor() {

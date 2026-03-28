@@ -51,21 +51,39 @@ public class PseudoLegalMoveGenerator {
         this.resetAttackBitboards();
         this.allMoves = new ArrayList<>();
         this.movesByColor = new HashMap<>();
-        this.allMoves.addAll(this.generateAllMovesByColor(Color.WHITE));
-        this.allMoves.addAll(this.generateAllMovesByColor(Color.BLACK));
+
+        // Generate non-king moves for both sides first (populates attack bitboards)
+        for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
+            this.movesByColor.put(color, new ArrayList<>());
+            this.generateNonKingMoves(color);
+        }
+        // Generate king moves after, so opponent attacks are available for castling checks
+        for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
+            this.movesByColor.get(color).addAll(this.generateKingMoves(color));
+            this.allMoves.addAll(this.movesByColor.get(color));
+        }
+
         return this.allMoves;
     }
 
-    public List<Move> generateAllMovesByColor(Color color) {
-        assert color != Color.EMPTY : "Color cannot be EMPTY when getting legal moves by color";
-        this.movesByColor.put(color, new ArrayList<>());
-        this.movesByColor.get(color).addAll(this.generatePawnMoves(color));
-        this.movesByColor.get(color).addAll(this.generateKnightMoves(color));
-        this.movesByColor.get(color).addAll(this.generateKingMoves(color));
-        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.ROOK));
-        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.BISHOP));
-        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
-        return this.movesByColor.get(color);
+    private void generateNonKingMoves(Color color) {
+        List<Move> moves = this.movesByColor.get(color);
+        moves.addAll(this.generatePawnMoves(color));
+        moves.addAll(this.generateKnightMoves(color));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.ROOK));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.BISHOP));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
+    }
+
+    private long getOpponentAttacks(Color color) {
+        Color opponent = BoardUtils.getOppositeColor(color);
+        int oi = opponent.ordinal();
+        long attacks = 0L;
+        for (PieceType type : PieceType.values()) {
+            if (type == PieceType.EMPTY) continue;
+            attacks |= this.attackBitboards.get(type)[oi];
+        }
+        return attacks;
     }
 
     // Getters for moves by square
@@ -136,21 +154,43 @@ public class PseudoLegalMoveGenerator {
         return knightMoves;
     }
 
+    // Castling constants: [white kingside, white queenside, black kingside, black queenside]
+    private static final int[] KING_HOME = {4, 4, 60, 60};
+    private static final int[] KING_TARGET = {6, 2, 62, 58};
+    private static final long[] EMPTY_MASKS = {0x60L, 0x0EL, 0x60L << 56, 0x0EL << 56};
+    private static final long[] SAFE_MASKS = {0x70L, 0x1CL, 0x70L << 56, 0x1CL << 56};
+
     private List<Move> generateKingMoves(Color color) {
         long kingBitboard = this.board.getPieceBitboard(color, PieceType.KING);
         long occupancyBitboard = this.board.getOccupancyBitboard(color);
 
         List<Move> kingMoves = new ArrayList<>();
         int fromSquare = Long.numberOfTrailingZeros(kingBitboard);
-        if (fromSquare < 64) {
-            long validMoves = KING_ATTACKS[fromSquare] & ~occupancyBitboard;
-            this.attackBitboards.get(PieceType.KING)[color.ordinal()] |= validMoves;
-            while (validMoves != 0L) {
-                int toSquare = Long.numberOfTrailingZeros(validMoves);
-                kingMoves.add(new Move(fromSquare, toSquare));
-                validMoves &= validMoves - 1L;
-            }
+        if (fromSquare >= 64) return kingMoves;
+
+        long validMoves = KING_ATTACKS[fromSquare] & ~occupancyBitboard;
+        this.attackBitboards.get(PieceType.KING)[color.ordinal()] |= validMoves;
+        while (validMoves != 0L) {
+            int toSquare = Long.numberOfTrailingZeros(validMoves);
+            kingMoves.add(new Move(fromSquare, toSquare));
+            validMoves &= validMoves - 1L;
         }
+
+        // Castling
+        boolean[] castlingRights = this.board.getCastlingRights(color);
+        long allOccupancy = ~this.board.getOccupancyBitboard(Color.EMPTY);
+        long opponentAttacks = this.getOpponentAttacks(color);
+        int base = color == Color.WHITE ? 0 : 2;
+
+        for (int side = 0; side < 2; side++) {
+            int i = base + side;
+            if (!castlingRights[side]) continue;
+            if (fromSquare != KING_HOME[i]) continue;
+            if ((allOccupancy & EMPTY_MASKS[i]) != 0) continue;
+            if ((opponentAttacks & SAFE_MASKS[i]) != 0) continue;
+            kingMoves.add(new Move(fromSquare, KING_TARGET[i]));
+        }
+
         return kingMoves;
     }
 
