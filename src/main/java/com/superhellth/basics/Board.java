@@ -5,7 +5,7 @@ import java.util.Map;
 
 public class Board {
 
-    private static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    public static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
 
     private final long[][] pieceBitboards;
@@ -18,7 +18,7 @@ public class Board {
     private int halfmoveClock;
     private int fullmoveNumber;
 
-    public Board() {
+    public Board(String startingFEN) {
         this.activeColor = Color.WHITE;
         this.pieceBitboards = new long[2][6];
         this.occupancyBitboards = new long[3];
@@ -28,7 +28,7 @@ public class Board {
         this.castlingRights = new boolean[4];
 
         this.resetBoard();
-        this.loadFromFEN(Board.TEST_FEN);
+        this.loadFromFEN(startingFEN);
     }
 
     public void placePiece(Color color, PieceType pieceType, int square) {

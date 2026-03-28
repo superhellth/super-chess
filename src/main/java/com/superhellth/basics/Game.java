@@ -11,7 +11,7 @@ public class Game {
     private PseudoLegalMoveGenerator moveGenerator;
 
     public Game() {
-        this.board = new Board();
+        this.board = new Board(Board.STARTING_FEN);
         this.moveGenerator = new PseudoLegalMoveGenerator(this.board);
         this.moveGenerator.generateAllMoves();
     }
