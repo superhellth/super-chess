@@ -62,8 +62,9 @@ public class PseudoLegalMoveGenerator {
         this.movesByColor.get(color).addAll(this.generatePawnMoves(color));
         this.movesByColor.get(color).addAll(this.generateKnightMoves(color));
         this.movesByColor.get(color).addAll(this.generateKingMoves(color));
-        this.movesByColor.get(color).addAll(this.generateRookMoves(color));
-        this.movesByColor.get(color).addAll(this.generateBishopMoves(color));
+        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.ROOK));
+        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.BISHOP));
+        this.movesByColor.get(color).addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
         return this.movesByColor.get(color);
     }
 
@@ -153,59 +154,44 @@ public class PseudoLegalMoveGenerator {
         return kingMoves;
     }
 
-    private List<Move> generateRookMoves(Color color) {
-        long rookBitboard = this.board.getPieceBitboard(color, PieceType.ROOK);
+    private List<Move> generateMovesFromMagic(Color color, PieceType pieceType) {
+        assert (pieceType == PieceType.ROOK) || (pieceType == PieceType.BISHOP) || (pieceType == PieceType.QUEEN) : "Can only use magic for rooks, bishops and queens!";
+        long pieceBitboard = this.board.getPieceBitboard(color, pieceType);
         long bothColorsOccupancy = ~this.board.getOccupancyBitboard(Color.EMPTY);
         long sameColorOccupancy = this.board.getOccupancyBitboard(color);
         long oppositeColorBitboard = this.board.getOccupancyBitboard(BoardUtils.getOppositeColor(color));
 
-        List<Move> rookMoves = new ArrayList<>();
-        while (rookBitboard != 0) {
-            int squareIndex = Long.numberOfTrailingZeros(rookBitboard);
-            long legalTargets = this.generateRookLikeAttacks(squareIndex, bothColorsOccupancy, sameColorOccupancy);
-            long attacks = legalTargets & oppositeColorBitboard;
-            this.attackBitboards.get(PieceType.ROOK)[color.ordinal()] |= attacks;
-            for (int targetSquare : BitboardUtils.getPopulatedIndices(legalTargets)) {
-                rookMoves.add(new Move(squareIndex, targetSquare));
+        List<Move> moves = new ArrayList<>();
+        while (pieceBitboard != 0) {
+            int squareIndex = Long.numberOfTrailingZeros(pieceBitboard);
+            long legalTargets;
+            if (pieceType == PieceType.QUEEN) {
+                long rookLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, PieceType.ROOK);
+                long bishopLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, PieceType.BISHOP);
+                legalTargets = rookLikeTargets | bishopLikeTargets;
+            } else {
+                legalTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, pieceType);
             }
-            rookBitboard &= rookBitboard - 1;
+            long attacks = legalTargets & oppositeColorBitboard;
+            this.attackBitboards.get(pieceType)[color.ordinal()] |= attacks;
+            for (int targetSquare : BitboardUtils.getPopulatedIndices(legalTargets)) {
+                moves.add(new Move(squareIndex, targetSquare));
+            }
+            pieceBitboard &= pieceBitboard - 1;
         }
 
-        return rookMoves;
+        return moves;
     }
 
-    private List<Move> generateBishopMoves(Color color) {
-        long bishopBitboard = this.board.getPieceBitboard(color, PieceType.BISHOP);
-        long bothColorsOccupancy = ~this.board.getOccupancyBitboard(Color.EMPTY);
-        long sameColorOccupancy = this.board.getOccupancyBitboard(color);
-        long oppositeColorBitboard = this.board.getOccupancyBitboard(BoardUtils.getOppositeColor(color));
-
-        List<Move> bishopMoves = new ArrayList<>();
-        while (bishopBitboard != 0) {
-            int squareIndex = Long.numberOfTrailingZeros(bishopBitboard);
-            long legalTargets = this.generateBishopLikeAttacks(squareIndex, bothColorsOccupancy, sameColorOccupancy);
-            long attacks = legalTargets & oppositeColorBitboard;
-            this.attackBitboards.get(PieceType.BISHOP)[color.ordinal()] |= attacks;
-            for (int targetSquare : BitboardUtils.getPopulatedIndices(legalTargets)) {
-                bishopMoves.add(new Move(squareIndex, targetSquare));
-            }
-            bishopBitboard &= bishopBitboard - 1;
-        }
-
-        return bishopMoves;
-    }
-
-    private long generateBishopLikeAttacks(int sourceSquare, long bothColorsOccupancy, long sameColorOccupancy) {
-        long occupancy = bothColorsOccupancy & MagicConstants.BISHOP_MASKS[sourceSquare];
-        int index = (int) ((occupancy * MagicConstants.BISHOP_MAGICS[sourceSquare]) >>> (64 - MagicConstants.BISHOP_SHIFTS[sourceSquare]));
-        long range = MagicConstants.BISHOP_TABLE[sourceSquare][index];
-        return range & ~sameColorOccupancy;
-    }
-
-    private long generateRookLikeAttacks(int sourceSquare, long bothColorsOccupancy, long sameColorOccupancy) {
-        long occupancy = bothColorsOccupancy & MagicConstants.ROOK_MASKS[sourceSquare];
-        int index = (int) ((occupancy * MagicConstants.ROOK_MAGICS[sourceSquare]) >>> (64 - MagicConstants.ROOK_SHIFTS[sourceSquare]));
-        long range = MagicConstants.ROOK_TABLE[sourceSquare][index];
+    private long generateAttacksFromMagic(int sourceSquare, long bothColorsOccupancy, long sameColorOccupancy, PieceType typeLike) {
+        assert (typeLike == PieceType.ROOK) || (typeLike == PieceType.BISHOP) : "Can only use magic for rooks and bishops!";
+        long[] masks = typeLike == PieceType.ROOK ? MagicConstants.ROOK_MASKS : MagicConstants.BISHOP_MASKS;
+        long[] magics = typeLike == PieceType.ROOK ? MagicConstants.ROOK_MAGICS : MagicConstants.BISHOP_MAGICS;
+        int[] shifts = typeLike == PieceType.ROOK ? MagicConstants.ROOK_SHIFTS : MagicConstants.BISHOP_SHIFTS;
+        long[][] lookup = typeLike == PieceType.ROOK ? MagicConstants.ROOK_TABLE : MagicConstants.BISHOP_TABLE;
+        long occupancy = bothColorsOccupancy & masks[sourceSquare];
+        int index = (int) ((occupancy * magics[sourceSquare]) >>> (64 - shifts[sourceSquare]));
+        long range = lookup[sourceSquare][index];
         return range & ~sameColorOccupancy;
     }
 
