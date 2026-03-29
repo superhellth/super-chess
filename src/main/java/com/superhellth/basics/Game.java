@@ -45,18 +45,18 @@ public class Game {
             this.board.placePiece(sourceColor, PieceType.ROOK, rookTo);
         }
 
+        // Handle en passant capture
+        if (sourceType == PieceType.PAWN && toSquare == this.board.getEnPassantSquare()) {
+            int capturedPawnSquare = sourceColor == Color.WHITE ? toSquare - 8 : toSquare + 8;
+            this.board.removePiece(capturedPawnSquare);
+        }
+
         // Handle en passant double push
         if (sourceType == PieceType.PAWN && Math.abs(toSquare - fromSquare) == 16) {
             int enPassantSquare = (fromSquare + toSquare) / 2;
             this.board.setEnPassantSquare(enPassantSquare);
         } else {
             this.board.setEnPassantSquare(-1);
-        }
-
-        // Handle en passant capture
-        if (sourceType == PieceType.PAWN && toSquare == this.board.getEnPassantSquare()) {
-            int capturedPawnSquare = sourceColor == Color.WHITE ? toSquare - 8 : toSquare + 8;
-            this.board.removePiece(capturedPawnSquare);
         }
 
         // Turn logic
