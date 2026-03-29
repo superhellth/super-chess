@@ -75,13 +75,13 @@ public class PseudoLegalMoveGenerator {
         moves.addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
     }
 
-    private long getOpponentAttacks(Color color) {
-        Color opponent = BoardUtils.getOppositeColor(color);
-        int oi = opponent.ordinal();
+    private long getColorAttacks(Color color) {
         long attacks = 0L;
         for (PieceType type : PieceType.values()) {
-            if (type == PieceType.EMPTY) continue;
-            attacks |= this.attackBitboards.get(type)[oi];
+            if (type == PieceType.EMPTY) {
+                continue;
+            }
+            attacks |= this.attackBitboards.get(type)[color.ordinal()];
         }
         return attacks;
     }
@@ -117,9 +117,12 @@ public class PseudoLegalMoveGenerator {
         // Generate targets
         long singlePushTargets = generateSinglePushTargets(color, pawnBitboard, emptyBitboard);
         long doublePushTargets = generateDoublePushTargets(color, singlePushTargets, emptyBitboard);
-        long eastAttacks = generatePawnAttacks(color, Direction.EAST, pawnBitboard, oppositeColorBitboard);
-        long westAttacks = generatePawnAttacks(color, Direction.WEST, pawnBitboard, oppositeColorBitboard);
+        long eastAttacks = generatePawnAttacks(color, Direction.EAST, pawnBitboard);
+        long westAttacks = generatePawnAttacks(color, Direction.WEST, pawnBitboard);
         this.attackBitboards.get(PieceType.PAWN)[color.ordinal()] = eastAttacks | westAttacks;
+        long oppositeColorMask = oppositeColorBitboard | (board.getEnPassantSquare() != -1 ? (1L << board.getEnPassantSquare()) : 0L);
+        eastAttacks &= oppositeColorMask;
+        westAttacks &= oppositeColorMask;
 
         // Extract moves from targets
         List<Move> moves = new ArrayList<>();
@@ -140,13 +143,14 @@ public class PseudoLegalMoveGenerator {
         long knightsToProcess = knightBitboard;
         while (knightsToProcess != 0L) {
             int fromSquare = Long.numberOfTrailingZeros(knightsToProcess);
-            long validMoves = KNIGHT_ATTACKS[fromSquare] & ~occupancyBitboard;
-            this.attackBitboards.get(PieceType.KNIGHT)[color.ordinal()] |= validMoves;
+            long knightAttacks = KNIGHT_ATTACKS[fromSquare];
+            this.attackBitboards.get(PieceType.KNIGHT)[color.ordinal()] |= knightAttacks;
+            knightAttacks &= ~occupancyBitboard;
 
-            while (validMoves != 0L) {
-                int toSquare = Long.numberOfTrailingZeros(validMoves);
+            while (knightAttacks != 0L) {
+                int toSquare = Long.numberOfTrailingZeros(knightAttacks);
                 knightMoves.add(new Move(fromSquare, toSquare));
-                validMoves &= validMoves - 1L;
+                knightAttacks &= knightAttacks - 1L;
             }
             knightsToProcess &= knightsToProcess - 1L;
         }
@@ -162,32 +166,43 @@ public class PseudoLegalMoveGenerator {
 
     private List<Move> generateKingMoves(Color color) {
         long kingBitboard = this.board.getPieceBitboard(color, PieceType.KING);
-        long occupancyBitboard = this.board.getOccupancyBitboard(color);
+        long sameColorOccupancy = this.board.getOccupancyBitboard(color);
+        long opponentAttacks = this.getColorAttacks(BoardUtils.getOppositeColor(color));
 
         List<Move> kingMoves = new ArrayList<>();
         int fromSquare = Long.numberOfTrailingZeros(kingBitboard);
-        if (fromSquare >= 64) return kingMoves;
-
-        long validMoves = KING_ATTACKS[fromSquare] & ~occupancyBitboard;
-        this.attackBitboards.get(PieceType.KING)[color.ordinal()] |= validMoves;
-        while (validMoves != 0L) {
-            int toSquare = Long.numberOfTrailingZeros(validMoves);
+        if (fromSquare >= 64) {
+            return kingMoves;
+        }
+        long kingAttacks = KING_ATTACKS[fromSquare];
+        this.attackBitboards.get(PieceType.KING)[color.ordinal()] |= kingAttacks;
+        kingAttacks &= ~sameColorOccupancy;
+        kingAttacks &= ~opponentAttacks;
+        while (kingAttacks != 0L) {
+            int toSquare = Long.numberOfTrailingZeros(kingAttacks);
             kingMoves.add(new Move(fromSquare, toSquare));
-            validMoves &= validMoves - 1L;
+            kingAttacks &= kingAttacks - 1L;
         }
 
         // Castling
         boolean[] castlingRights = this.board.getCastlingRights(color);
         long allOccupancy = ~this.board.getOccupancyBitboard(Color.EMPTY);
-        long opponentAttacks = this.getOpponentAttacks(color);
         int base = color == Color.WHITE ? 0 : 2;
 
         for (int side = 0; side < 2; side++) {
             int i = base + side;
-            if (!castlingRights[side]) continue;
-            if (fromSquare != KING_HOME[i]) continue;
-            if ((allOccupancy & EMPTY_MASKS[i]) != 0) continue;
-            if ((opponentAttacks & SAFE_MASKS[i]) != 0) continue;
+            if (!castlingRights[side]) {
+                continue;
+            }
+            if (fromSquare != KING_HOME[i]) {
+                continue;
+            }
+            if ((allOccupancy & EMPTY_MASKS[i]) != 0) {
+                continue;
+            }
+            if ((opponentAttacks & SAFE_MASKS[i]) != 0) {
+                continue;
+            }
             kingMoves.add(new Move(fromSquare, KING_TARGET[i]));
         }
 
@@ -199,22 +214,22 @@ public class PseudoLegalMoveGenerator {
         long pieceBitboard = this.board.getPieceBitboard(color, pieceType);
         long bothColorsOccupancy = ~this.board.getOccupancyBitboard(Color.EMPTY);
         long sameColorOccupancy = this.board.getOccupancyBitboard(color);
-        long oppositeColorBitboard = this.board.getOccupancyBitboard(BoardUtils.getOppositeColor(color));
+        // long oppositeColorBitboard = this.board.getOccupancyBitboard(BoardUtils.getOppositeColor(color));
 
         List<Move> moves = new ArrayList<>();
         while (pieceBitboard != 0) {
             int squareIndex = Long.numberOfTrailingZeros(pieceBitboard);
-            long legalTargets;
+            long allTargets;
             if (pieceType == PieceType.QUEEN) {
-                long rookLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, PieceType.ROOK);
-                long bishopLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, PieceType.BISHOP);
-                legalTargets = rookLikeTargets | bishopLikeTargets;
+                long rookLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, PieceType.ROOK);
+                long bishopLikeTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, PieceType.BISHOP);
+                allTargets = rookLikeTargets | bishopLikeTargets;
             } else {
-                legalTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, sameColorOccupancy, pieceType);
+                allTargets = this.generateAttacksFromMagic(squareIndex, bothColorsOccupancy, pieceType);
             }
-            long attacks = legalTargets & oppositeColorBitboard;
-            this.attackBitboards.get(pieceType)[color.ordinal()] |= attacks;
-            for (int targetSquare : BitboardUtils.getPopulatedIndices(legalTargets)) {
+            this.attackBitboards.get(pieceType)[color.ordinal()] |= allTargets;
+            allTargets &= ~sameColorOccupancy;
+            for (int targetSquare : BitboardUtils.getPopulatedIndices(allTargets)) {
                 moves.add(new Move(squareIndex, targetSquare));
             }
             pieceBitboard &= pieceBitboard - 1;
@@ -223,7 +238,7 @@ public class PseudoLegalMoveGenerator {
         return moves;
     }
 
-    private long generateAttacksFromMagic(int sourceSquare, long bothColorsOccupancy, long sameColorOccupancy, PieceType typeLike) {
+    private long generateAttacksFromMagic(int sourceSquare, long bothColorsOccupancy, PieceType typeLike) {
         assert (typeLike == PieceType.ROOK) || (typeLike == PieceType.BISHOP) : "Can only use magic for rooks and bishops!";
         long[] masks = typeLike == PieceType.ROOK ? MagicConstants.ROOK_MASKS : MagicConstants.BISHOP_MASKS;
         long[] magics = typeLike == PieceType.ROOK ? MagicConstants.ROOK_MAGICS : MagicConstants.BISHOP_MAGICS;
@@ -232,17 +247,17 @@ public class PseudoLegalMoveGenerator {
         long occupancy = bothColorsOccupancy & masks[sourceSquare];
         int index = (int) ((occupancy * magics[sourceSquare]) >>> (64 - shifts[sourceSquare]));
         long range = lookup[sourceSquare][index];
-        return range & ~sameColorOccupancy;
+        return range;
     }
 
-    private long generatePawnAttacks(Color color, Direction direction, long pawnBitboard, long oppositeColorBitboard) {
+    private long generatePawnAttacks(Color color, Direction direction, long pawnBitboard) {
         long attacks;
         if (color == Color.WHITE) {
             attacks = BitboardUtils.shift(pawnBitboard, direction == Direction.EAST ? Direction.NORTH_EAST : Direction.NORTH_WEST);
         } else {
             attacks = BitboardUtils.shift(pawnBitboard, direction == Direction.EAST ? Direction.SOUTH_EAST : Direction.SOUTH_WEST);
         }
-        return attacks & oppositeColorBitboard;
+        return attacks;
     }
 
     private long generateSinglePushTargets(Color color, long pawnBitboard, long emptyBitboard) {

@@ -103,6 +103,14 @@ public class Board {
         this.castlingRights[color == Color.WHITE ? side : 2 + side] = false;
     }
 
+    public int getEnPassantSquare() {
+        return this.enPassantSquare;
+    }
+
+    public void setEnPassantSquare(int square) {
+        this.enPassantSquare = square;
+    }
+
     public Color getActiveColor() {
         return this.activeColor;
     }

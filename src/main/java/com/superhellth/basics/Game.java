@@ -15,8 +15,7 @@ public class Game {
     private String fen;
 
     public Game() {
-        this.board = new Board(Game.TEST_FEN);
-        System.out.println(this.board.toFEN().equals(Game.TEST_FEN));
+        this.board = new Board(Game.STARTING_FEN);
         this.moveGenerator = new PseudoLegalMoveGenerator(this.board);
         this.moveGenerator.generateAllMoves();
     }
@@ -44,6 +43,20 @@ public class Game {
             int rookTo = kingside ? fromSquare + 1 : fromSquare - 1;
             this.board.removePiece(rookFrom);
             this.board.placePiece(sourceColor, PieceType.ROOK, rookTo);
+        }
+
+        // Handle en passant double push
+        if (sourceType == PieceType.PAWN && Math.abs(toSquare - fromSquare) == 16) {
+            int enPassantSquare = (fromSquare + toSquare) / 2;
+            this.board.setEnPassantSquare(enPassantSquare);
+        } else {
+            this.board.setEnPassantSquare(-1);
+        }
+
+        // Handle en passant capture
+        if (sourceType == PieceType.PAWN && toSquare == this.board.getEnPassantSquare()) {
+            int capturedPawnSquare = sourceColor == Color.WHITE ? toSquare - 8 : toSquare + 8;
+            this.board.removePiece(capturedPawnSquare);
         }
 
         // Turn logic
