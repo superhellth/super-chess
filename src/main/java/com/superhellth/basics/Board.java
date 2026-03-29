@@ -1,9 +1,8 @@
 package com.superhellth.basics;
 
-public class Board {
+import com.superhellth.utils.BoardUtils;
 
-    public static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
+public class Board {
 
     private final long[][] pieceBitboards;
     private final long[] occupancyBitboards; // [white, black, empty]
@@ -110,6 +109,93 @@ public class Board {
 
     public void setActiveColor(Color color) {
         this.activeColor = color;
+    }
+
+    public String toFEN() {
+        int boardIndex = 56;
+        int fileIndex = 0;
+        String fen = "";
+
+        // Piece setup
+        for (int rank = 7; rank >= 0; rank--) {
+            int emptyFiles = 0;
+            for (int file = 0; file < 8; file++) {
+                int squareIndex = BoardUtils.getSquareIndexFromRankAndFile(rank, file);
+                Color color = this.squareColors[squareIndex];
+                PieceType type = this.squarePieceTypes[squareIndex];
+
+                assert (color == Color.EMPTY && type == PieceType.EMPTY) || (color != Color.EMPTY && type == PieceType.EMPTY) : "Inconsistent piece detected";
+                if (type == PieceType.EMPTY) {
+                    emptyFiles++;
+                } else {
+                    if (emptyFiles != 0) {
+                        fen += emptyFiles;
+                    }
+                    String pieceStr = "";
+                    switch (type) {
+                        case PAWN ->
+                            pieceStr = "p";
+                        case KNIGHT ->
+                            pieceStr = "n";
+                        case BISHOP ->
+                            pieceStr = "b";
+                        case ROOK ->
+                            pieceStr = "r";
+                        case QUEEN ->
+                            pieceStr = "q";
+                        case KING ->
+                            pieceStr = "k";
+                    }
+                    pieceStr = color == Color.WHITE ? pieceStr.toUpperCase() : pieceStr;
+                    fen += pieceStr;
+                    emptyFiles = 0;
+                }
+            }
+            if (emptyFiles != 0) {
+                fen += emptyFiles;
+            }
+            if (rank != 0) {
+                fen += "/";
+            }
+        }
+
+        // Active color
+        fen += " " + (this.activeColor == Color.WHITE ? "w" : "b");
+
+        // Castling rights
+        fen += " ";
+        if (this.castlingRights[0]) {
+            fen += "K";
+        }
+        if (this.castlingRights[1]) {
+            fen += "Q";
+        }
+        if (this.castlingRights[2]) {
+            fen += "k";
+        }
+        if (this.castlingRights[3]) {
+            fen += "q";
+        }
+
+        if (!this.castlingRights[0] && !this.castlingRights[1] && !this.castlingRights[2] && !this.castlingRights[3]) {
+            fen += "-";
+        }
+
+        // En passant
+        fen += " ";
+        if (this.enPassantSquare != -1) {
+            int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(this.enPassantSquare);
+            int file = rankAndFile[1];
+            int rank = rankAndFile[0];
+            fen += (char) ('a' + file) + String.valueOf(rank + 1);
+        } else {
+            fen += "-";
+        }
+
+        // Halfmove clock and fullmove number
+        fen += " " + this.halfmoveClock + " " + this.fullmoveNumber;
+
+        return fen;
     }
 
     public void loadFromFEN(String fen) {

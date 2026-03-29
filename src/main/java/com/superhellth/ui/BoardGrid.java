@@ -27,7 +27,7 @@ public class BoardGrid extends GridPane {
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             this.squares[squareIndex] = new BoardSquare(squareIndex, this::handleSquareClick);
             int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(squareIndex);
-            this.add(this.squares[squareIndex], rankAndFile[0], rankAndFile[1]);
+            this.add(this.squares[squareIndex], rankAndFile[1], 7 - rankAndFile[0]);
         }
         this.loadBoard();
 

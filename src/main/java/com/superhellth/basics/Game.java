@@ -7,11 +7,16 @@ import com.superhellth.utils.BoardUtils;
 
 public class Game {
 
+    public static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
+
     private Board board;
     private PseudoLegalMoveGenerator moveGenerator;
+    private String fen;
 
     public Game() {
-        this.board = new Board(Board.STARTING_FEN);
+        this.board = new Board(Game.TEST_FEN);
+        System.out.println(this.board.toFEN().equals(Game.TEST_FEN));
         this.moveGenerator = new PseudoLegalMoveGenerator(this.board);
         this.moveGenerator.generateAllMoves();
     }
