@@ -29,14 +29,14 @@ public class Game {
         PieceType sourceType = this.board.getSquarePieceType(fromSquare);
         assert (sourceColor != Color.EMPTY) && (sourceType != PieceType.EMPTY) : "Empty piece / color making a move!";
 
-        this.updateCastlingRights(fromSquare, toSquare, sourceColor, sourceType);
 
         // Move pieces
         this.board.removePiece(fromSquare);
         this.board.removePiece(toSquare);
         this.board.placePiece(sourceColor, sourceType, toSquare);
 
-        // Handle castling rook movement (king moved 2 squares)
+        // Handle castling rights + rook movement
+        this.updateCastlingRights(fromSquare, toSquare, sourceColor, sourceType);
         if (sourceType == PieceType.KING && Math.abs(toSquare - fromSquare) == 2) {
             boolean kingside = toSquare > fromSquare;
             int rookFrom = kingside ? fromSquare + 3 : fromSquare - 4;
@@ -57,6 +57,12 @@ public class Game {
             this.board.setEnPassantSquare(enPassantSquare);
         } else {
             this.board.setEnPassantSquare(-1);
+        }
+
+        // Handle promotion
+        if (move.getPromotionPieceType() != PieceType.EMPTY) {
+            this.board.removePiece(toSquare);
+            this.board.placePiece(sourceColor, move.getPromotionPieceType(), toSquare);
         }
 
         // Turn logic

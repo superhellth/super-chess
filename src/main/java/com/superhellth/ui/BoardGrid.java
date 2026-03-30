@@ -17,6 +17,8 @@ public class BoardGrid extends GridPane {
     private final Board board;
     private final BoardSquare[] squares = new BoardSquare[64];
     private BoardSquare selectedSquare = null;
+    private Move pendingPromotionMove = null;
+    private int[] promotionOptionSquares = null;
 
     public BoardGrid(Game game) {
         super();
@@ -50,10 +52,26 @@ public class BoardGrid extends GridPane {
             PieceType pieceType = this.board.getSquarePieceType(i);
             Color pieceColor = this.board.getSquareColor(i);
             this.squares[i].setPiece(pieceType, pieceColor);
+            this.squares[i].resetHighlight();
+            this.squares[i].setTargetMove(null, false);
         }
     }
 
     private void handleSquareClick(BoardSquare square) {
+        // Handle click during promotion selection
+        if (this.pendingPromotionMove != null) {
+            PieceType chosenPiece = square.getPromotionOption();
+            clearPromotionOptions();
+            if (chosenPiece != null) {
+                this.pendingPromotionMove.setPromotionPieceType(chosenPiece);
+                this.game.executeMove(this.pendingPromotionMove);
+            }
+            this.pendingPromotionMove = null;
+            this.selectedSquare = null;
+            this.loadBoard();
+            return;
+        }
+
         int squareIndex = square.getSquareIndex();
         Move squareTargetMove = square.getTargetMove();
 
@@ -65,21 +83,63 @@ public class BoardGrid extends GridPane {
         if (this.selectedSquare == square) {
             this.selectedSquare = null;
         } else if (squareTargetMove != null) {
-            this.game.executeMove(squareTargetMove);
-            this.loadBoard();
-        } else  {
+            if (square.isTargetMovePromotion()) {
+                showPromotionOptions(squareTargetMove);
+            } else {
+                this.game.executeMove(squareTargetMove);
+                this.selectedSquare = null;
+                this.loadBoard();
+            }
+        } else {
             this.selectedSquare = square;
             for (Move move : this.game.getPseudoLegalMovesFromSquare(squareIndex)) {
                 int targetSquareIndex = move.getToSquare();
-                this.squares[targetSquareIndex].setTargetMove(move);
+                boolean isCapture = this.board.getSquareColor(targetSquareIndex) != Color.EMPTY;
+                this.squares[targetSquareIndex].setTargetMove(move, isCapture);
+                this.squares[targetSquareIndex].setTargetMoveIsPromotion(move.getPromotionPieceType() != PieceType.EMPTY);
             }
             square.select();
         }
     }
 
+    private void showPromotionOptions(Move move) {
+        this.pendingPromotionMove = move;
+        if (this.selectedSquare != null) {
+            this.selectedSquare.resetHighlight();
+        }
+        this.resetAllTargetMoves();
+
+        int targetSquare = move.getToSquare();
+        int file = targetSquare % 8;
+        int rank = targetSquare / 8;
+        Color pieceColor = this.board.getSquareColor(move.getFromSquare());
+
+        // White promotes on rank 7 -> extend downward; black promotes on rank 0 -> extend upward
+        int rankStep = (rank == 7) ? -1 : 1;
+
+        PieceType[] options = { PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT };
+        this.promotionOptionSquares = new int[4];
+
+        for (int i = 0; i < 4; i++) {
+            int optionRank = rank + i * rankStep;
+            int squareIndex = optionRank * 8 + file;
+            this.promotionOptionSquares[i] = squareIndex;
+            this.squares[squareIndex].showPromotionOption(options[i], pieceColor);
+        }
+    }
+
+    private void clearPromotionOptions() {
+        if (this.promotionOptionSquares != null) {
+            for (int squareIndex : this.promotionOptionSquares) {
+                this.squares[squareIndex].clearPromotionOption();
+            }
+            this.promotionOptionSquares = null;
+        }
+    }
+
     private void resetAllTargetMoves() {
         for (int i = 0; i < 64; i++) {
-            this.squares[i].setTargetMove(null);
+            this.squares[i].setTargetMove(null, false);
         }
     }
 

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
@@ -126,10 +127,10 @@ public class PseudoLegalMoveGenerator {
 
         // Extract moves from targets
         List<Move> moves = new ArrayList<>();
-        moves.addAll(this.generateMovesFromBitboard(singlePushTargets, color == Color.WHITE ? 8 : -8));
-        moves.addAll(this.generateMovesFromBitboard(doublePushTargets, color == Color.WHITE ? 16 : -16));
-        moves.addAll(this.generateMovesFromBitboard(eastAttacks, color == Color.WHITE ? 9 : -7));
-        moves.addAll(this.generateMovesFromBitboard(westAttacks, color == Color.WHITE ? 7 : -9));
+        moves.addAll(this.generatePawnMovesFromBitboard(singlePushTargets, color == Color.WHITE ? 8 : -8));
+        moves.addAll(this.generatePawnMovesFromBitboard(doublePushTargets, color == Color.WHITE ? 16 : -16));
+        moves.addAll(this.generatePawnMovesFromBitboard(eastAttacks, color == Color.WHITE ? 9 : -7));
+        moves.addAll(this.generatePawnMovesFromBitboard(westAttacks, color == Color.WHITE ? 7 : -9));
 
         return moves;
     }
@@ -276,12 +277,26 @@ public class PseudoLegalMoveGenerator {
         return BitboardUtils.shift(singlePushTargets, Direction.SOUTH) & rank5 & emptyBitboard;
     }
 
-    private List<Move> generateMovesFromBitboard(long bitboard, int offset) {
+    private final static int[][] PAWN_PROMOTION_SQUARES = {
+            {56, 57, 58, 59, 60, 61, 62, 63},
+            {0, 1, 2, 3, 4, 5, 6, 7}
+    };
+
+    private List<Move> generatePawnMovesFromBitboard(long bitboard, int offset) {
         List<Move> moves = new ArrayList<>();
         while (bitboard != 0) {
             int toSquare = Long.numberOfTrailingZeros(bitboard);
             int fromSquare = toSquare - offset;
-            moves.add(new Move(fromSquare, toSquare));
+            int[] promotionRanks = offset > 0 ? PAWN_PROMOTION_SQUARES[0] : PAWN_PROMOTION_SQUARES[1];
+            if (IntStream.of(promotionRanks).anyMatch(rank -> rank == toSquare)) {
+                for (PieceType promotionPiece : new PieceType[]{PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT}) {
+                    Move promotionMove = new Move(fromSquare, toSquare);
+                    promotionMove.setPromotionPieceType(promotionPiece);
+                    moves.add(promotionMove);
+                }
+            } else {
+                moves.add(new Move(fromSquare, toSquare));
+            }
             bitboard &= bitboard - 1;
         }
         return moves;
