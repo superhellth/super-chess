@@ -11,13 +11,13 @@ public class Game {
     private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
 
     private Board board;
-    private PseudoLegalMoveGenerator moveGenerator;
+    private MoveGenerator moveGenerator;
     private String fen;
 
     public Game() {
         this.board = new Board(Game.STARTING_FEN);
-        this.moveGenerator = new PseudoLegalMoveGenerator(this.board);
-        this.moveGenerator.generateAllMoves();
+        this.moveGenerator = new MoveGenerator(this.board);
+        this.moveGenerator.generateAllLegalMoves();
     }
 
     public void executeMove(Move move) {
@@ -67,7 +67,7 @@ public class Game {
 
         // Turn logic
         this.board.setActiveColor(BoardUtils.getOppositeColor(sourceColor));
-        this.moveGenerator.generateAllMoves();
+        this.moveGenerator.generateAllLegalMoves();
     }
 
     public List<Move> getPseudoLegalMovesFromSquare(int squareIndex) {
@@ -83,7 +83,7 @@ public class Game {
         return this.board;
     }
 
-    public PseudoLegalMoveGenerator getMoveGenerator() {
+    public MoveGenerator getMoveGenerator() {
         return this.moveGenerator;
     }
 

@@ -10,7 +10,7 @@ import com.superhellth.utils.BitboardUtils;
 import com.superhellth.utils.BoardUtils;
 import com.superhellth.utils.MagicConstants;
 
-public class PseudoLegalMoveGenerator {
+public class MoveGenerator {
 
     // Lookup tables
     public static final long[] KNIGHT_ATTACKS = new long[64];
@@ -18,13 +18,14 @@ public class PseudoLegalMoveGenerator {
 
     // Logic
     private final Board board;
-    private List<Move> allMoves;
-    private Map<Color, List<Move>> movesByColor;
+    private List<Move> allPseudoLegalMoves;
+    private List<Move> allLegalMoves;
+    private Map<Color, List<Move>> pseudoLegalMovesByColor;
 
     // Attack bitboards: 0 white, 1 black
     private final Map<PieceType, Long[]> attackBitboards;
 
-    public PseudoLegalMoveGenerator(Board board) {
+    public MoveGenerator(Board board) {
         this.board = board;
         this.attackBitboards = new HashMap<>();
         for (PieceType type : PieceType.values()) {
@@ -34,11 +35,11 @@ public class PseudoLegalMoveGenerator {
             this.attackBitboards.put(type, new Long[]{0L, 0L});
         }
 
-        PseudoLegalMoveGenerator.initializeKnightAttacks();
-        PseudoLegalMoveGenerator.initializeKingAttacks();
+        MoveGenerator.initializeKnightAttacks();
+        MoveGenerator.initializeKingAttacks();
     }
 
-    public void resetAttackBitboards() {
+    private void resetAttackBitboards() {
         for (PieceType type : PieceType.values()) {
             if (type == PieceType.EMPTY) {
                 continue;
@@ -48,54 +49,142 @@ public class PseudoLegalMoveGenerator {
         }
     }
 
-    public List<Move> generateAllMoves() {
+    // Whether the closest blocker on this ray has the lowest bit index (true) or highest (false)
+    private static final boolean[] RAY_SCAN_LSB = {
+        true,   // NORTH
+        false,  // SOUTH
+        true,   // EAST
+        false,  // WEST
+        true,   // NORTH_WEST
+        true,   // NORTH_EAST
+        false,  // SOUTH_WEST
+        false   // SOUTH_EAST
+    };
+
+    // Whether this ray direction is cardinal (rook/queen) or diagonal (bishop/queen)
+    private static final boolean[] RAY_IS_CARDINAL = {
+        true, true, true, true,     // N, S, E, W
+        false, false, false, false  // NW, NE, SW, SE
+    };
+
+    public List<Move> generateAllPseudoLegalMoves() {
         this.resetAttackBitboards();
-        this.allMoves = new ArrayList<>();
-        this.movesByColor = new HashMap<>();
+        this.allPseudoLegalMoves = new ArrayList<>();
+        this.pseudoLegalMovesByColor = new HashMap<>();
 
         // Generate non-king moves for both sides first (populates attack bitboards)
         for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
-            this.movesByColor.put(color, new ArrayList<>());
+            this.pseudoLegalMovesByColor.put(color, new ArrayList<>());
             this.generateNonKingMoves(color);
         }
         // Generate king moves after, so opponent attacks are available for castling checks
         for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
-            this.movesByColor.get(color).addAll(this.generateKingMoves(color));
-            this.allMoves.addAll(this.movesByColor.get(color));
+            this.pseudoLegalMovesByColor.get(color).addAll(this.generateKingMoves(color));
+            this.allPseudoLegalMoves.addAll(this.pseudoLegalMovesByColor.get(color));
         }
 
-        return this.allMoves;
+        return this.allPseudoLegalMoves;
     }
 
-    private void generateNonKingMoves(Color color) {
-        List<Move> moves = this.movesByColor.get(color);
-        moves.addAll(this.generatePawnMoves(color));
-        moves.addAll(this.generateKnightMoves(color));
-        moves.addAll(this.generateMovesFromMagic(color, PieceType.ROOK));
-        moves.addAll(this.generateMovesFromMagic(color, PieceType.BISHOP));
-        moves.addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
-    }
+    public List<Move> generateAllLegalMoves() {
+        this.generateAllPseudoLegalMoves();
+        this.allLegalMoves = new ArrayList<>();
 
-    private long getColorAttacks(Color color) {
-        long attacks = 0L;
-        for (PieceType type : PieceType.values()) {
-            if (type == PieceType.EMPTY) {
-                continue;
+        for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
+            Map<Integer, Long> pinMasks = computePinMasks(color);
+
+            int kingSquare = Long.numberOfTrailingZeros(board.getPieceBitboard(color, PieceType.KING));
+            Color opponentColor = BoardUtils.getOppositeColor(color);
+            long opponentRooksQueens = board.getPieceBitboard(opponentColor, PieceType.ROOK)
+                    | board.getPieceBitboard(opponentColor, PieceType.QUEEN);
+
+            for (Move move : this.pseudoLegalMovesByColor.get(color)) {
+                // Pin restriction: pinned pieces can only move along the pin ray
+                Long pinRay = pinMasks.get(move.getFromSquare());
+                if (pinRay != null && (pinRay & (1L << move.getToSquare())) == 0) {
+                    continue;
+                }
+
+                // En passant horizontal pin: removing both pawns may expose king to rook/queen
+                if (board.getEnPassantSquare() != -1
+                        && board.getEnPassantSquare() == move.getToSquare()
+                        && board.getSquarePieceType(move.getFromSquare()) == PieceType.PAWN) {
+                    int capturedPawnSquare = color == Color.WHITE
+                            ? move.getToSquare() - 8
+                            : move.getToSquare() + 8;
+                    long occupancyAfter = (~board.getOccupancyBitboard(Color.EMPTY))
+                            & ~(1L << move.getFromSquare())
+                            & ~(1L << capturedPawnSquare)
+                            | (1L << move.getToSquare());
+                    long kingRookAttacks = generateAttacksFromMagic(kingSquare, occupancyAfter, PieceType.ROOK);
+                    if ((kingRookAttacks & opponentRooksQueens) != 0) {
+                        continue;
+                    }
+                }
+
+                this.allLegalMoves.add(move);
             }
-            attacks |= this.attackBitboards.get(type)[color.ordinal()];
         }
-        return attacks;
+
+        return this.allLegalMoves;
+    }
+
+    private Map<Integer, Long> computePinMasks(Color color) {
+        Map<Integer, Long> pinMasks = new HashMap<>();
+
+        int kingSquare = Long.numberOfTrailingZeros(board.getPieceBitboard(color, PieceType.KING));
+        if (kingSquare >= 64) return pinMasks;
+
+        long friendlyOccupancy = board.getOccupancyBitboard(color);
+        Color opponentColor = BoardUtils.getOppositeColor(color);
+        long opponentRooksQueens = board.getPieceBitboard(opponentColor, PieceType.ROOK)
+                | board.getPieceBitboard(opponentColor, PieceType.QUEEN);
+        long opponentBishopsQueens = board.getPieceBitboard(opponentColor, PieceType.BISHOP)
+                | board.getPieceBitboard(opponentColor, PieceType.QUEEN);
+        long allOccupancy = ~board.getOccupancyBitboard(Color.EMPTY);
+
+        for (int dir = 0; dir < 8; dir++) {
+            long ray = MagicConstants.RAY_MASKS[kingSquare][dir];
+            long blockersOnRay = ray & allOccupancy;
+            if (blockersOnRay == 0) continue;
+
+            // Find first blocker (closest to king)
+            int firstBlocker = RAY_SCAN_LSB[dir]
+                    ? Long.numberOfTrailingZeros(blockersOnRay)
+                    : 63 - Long.numberOfLeadingZeros(blockersOnRay);
+
+            // First blocker must be a friendly piece
+            if ((friendlyOccupancy & (1L << firstBlocker)) == 0) continue;
+
+            // Find second blocker (the potential pinner)
+            long remainingBlockers = blockersOnRay & ~(1L << firstBlocker);
+            if (remainingBlockers == 0) continue;
+
+            int secondBlocker = RAY_SCAN_LSB[dir]
+                    ? Long.numberOfTrailingZeros(remainingBlockers)
+                    : 63 - Long.numberOfLeadingZeros(remainingBlockers);
+
+            // Second blocker must be an enemy slider matching this ray direction
+            long relevantAttackers = RAY_IS_CARDINAL[dir] ? opponentRooksQueens : opponentBishopsQueens;
+            if ((relevantAttackers & (1L << secondBlocker)) == 0) continue;
+
+            // Pin detected: allowed squares are the ray from king up to and including pinner
+            long pinRay = ray & ~MagicConstants.RAY_MASKS[secondBlocker][dir];
+            pinMasks.put(firstBlocker, pinRay);
+        }
+
+        return pinMasks;
     }
 
     // Getters for moves by square
     public List<Move> getAllMovesBySquareList(int squareIndex) {
-        return this.allMoves.stream()
+        return this.allLegalMoves.stream()
                 .filter(move -> move.getFromSquare() == squareIndex)
                 .toList();
     }
 
     public long getAllMovesBySquareBitboard(int squareIndex) {
-        return this.allMoves.stream()
+        return this.allLegalMoves.stream()
                 .filter(move -> move.getFromSquare() == squareIndex)
                 .reduce(0L, (bitboard, move) -> bitboard | (1L << move.getToSquare()), (a, b) -> a | b);
     }
@@ -107,6 +196,15 @@ public class PseudoLegalMoveGenerator {
     }
 
     // Move generation
+    private void generateNonKingMoves(Color color) {
+        List<Move> moves = this.pseudoLegalMovesByColor.get(color);
+        moves.addAll(this.generatePawnMoves(color));
+        moves.addAll(this.generateKnightMoves(color));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.ROOK));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.BISHOP));
+        moves.addAll(this.generateMovesFromMagic(color, PieceType.QUEEN));
+    }
+
     private List<Move> generatePawnMoves(Color color) {
         assert color != Color.EMPTY : "Color cannot be EMPTY when generating pawn moves";
 
@@ -278,8 +376,8 @@ public class PseudoLegalMoveGenerator {
     }
 
     private final static int[][] PAWN_PROMOTION_SQUARES = {
-            {56, 57, 58, 59, 60, 61, 62, 63},
-            {0, 1, 2, 3, 4, 5, 6, 7}
+        {56, 57, 58, 59, 60, 61, 62, 63},
+        {0, 1, 2, 3, 4, 5, 6, 7}
     };
 
     private List<Move> generatePawnMovesFromBitboard(long bitboard, int offset) {
@@ -300,6 +398,17 @@ public class PseudoLegalMoveGenerator {
             bitboard &= bitboard - 1;
         }
         return moves;
+    }
+
+    private long getColorAttacks(Color color) {
+        long attacks = 0L;
+        for (PieceType type : PieceType.values()) {
+            if (type == PieceType.EMPTY) {
+                continue;
+            }
+            attacks |= this.attackBitboards.get(type)[color.ordinal()];
+        }
+        return attacks;
     }
 
     private static void initializeKnightAttacks() {
