@@ -15,7 +15,11 @@ public class Game {
     private String fen;
 
     public Game() {
-        this.board = new Board(Game.STARTING_FEN);
+        this(Game.STARTING_FEN);
+    }
+
+    public Game(String fen) {
+        this.board = new Board(fen);
         this.moveGenerator = new MoveGenerator(this.board);
         this.moveGenerator.generateAllLegalMoves();
     }
@@ -28,7 +32,6 @@ public class Game {
         assert sourceColor == this.board.getActiveColor() : "Executing move of inactive color!";
         PieceType sourceType = this.board.getSquarePieceType(fromSquare);
         assert (sourceColor != Color.EMPTY) && (sourceType != PieceType.EMPTY) : "Empty piece / color making a move!";
-
 
         // Move pieces
         this.board.removePiece(fromSquare);
