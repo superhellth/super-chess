@@ -7,6 +7,10 @@ public class MagicConstants {
     public static final long[][] ROOK_TABLE = new long[64][];
     public static final long[][] BISHOP_TABLE = new long[64][];
 
+    // Ray masks for each square in each direction (indexed by Direction ordinal)
+    // NORTH=0, SOUTH=1, EAST=2, WEST=3, NORTH_WEST=4, NORTH_EAST=5, SOUTH_WEST=6, SOUTH_EAST=7
+    public static final long[][] RAY_MASKS = new long[64][8];
+
     public static final int[] ROOK_SHIFTS = {
         12, 11, 11, 11, 11, 11, 11, 12,
         11, 10, 10, 10, 10, 10, 10, 11,
@@ -117,6 +121,55 @@ public class MagicConstants {
                 MagicConstants::computeRookMask, MagicConstants::computeRookAttacks);
         initializeMagicTable(BISHOP_MASKS, BISHOP_TABLE, BISHOP_SHIFTS, BISHOP_MAGICS,
                 MagicConstants::computeBishopMask, MagicConstants::computeBishopAttacks);
+        initializeRayMasks();
+    }
+
+    private static void initializeRayMasks() {
+        for (int sq = 0; sq < 64; sq++) {
+            int rank = sq / 8;
+            int file = sq % 8;
+            long ray;
+
+            // NORTH (ordinal 0)
+            ray = 0L;
+            for (int r = rank + 1; r <= 7; r++) ray |= 1L << (r * 8 + file);
+            RAY_MASKS[sq][0] = ray;
+
+            // SOUTH (ordinal 1)
+            ray = 0L;
+            for (int r = rank - 1; r >= 0; r--) ray |= 1L << (r * 8 + file);
+            RAY_MASKS[sq][1] = ray;
+
+            // EAST (ordinal 2)
+            ray = 0L;
+            for (int f = file + 1; f <= 7; f++) ray |= 1L << (rank * 8 + f);
+            RAY_MASKS[sq][2] = ray;
+
+            // WEST (ordinal 3)
+            ray = 0L;
+            for (int f = file - 1; f >= 0; f--) ray |= 1L << (rank * 8 + f);
+            RAY_MASKS[sq][3] = ray;
+
+            // NORTH_WEST (ordinal 4)
+            ray = 0L;
+            for (int r = rank + 1, f = file - 1; r <= 7 && f >= 0; r++, f--) ray |= 1L << (r * 8 + f);
+            RAY_MASKS[sq][4] = ray;
+
+            // NORTH_EAST (ordinal 5)
+            ray = 0L;
+            for (int r = rank + 1, f = file + 1; r <= 7 && f <= 7; r++, f++) ray |= 1L << (r * 8 + f);
+            RAY_MASKS[sq][5] = ray;
+
+            // SOUTH_WEST (ordinal 6)
+            ray = 0L;
+            for (int r = rank - 1, f = file - 1; r >= 0 && f >= 0; r--, f--) ray |= 1L << (r * 8 + f);
+            RAY_MASKS[sq][6] = ray;
+
+            // SOUTH_EAST (ordinal 7)
+            ray = 0L;
+            for (int r = rank - 1, f = file + 1; r >= 0 && f <= 7; r--, f++) ray |= 1L << (r * 8 + f);
+            RAY_MASKS[sq][7] = ray;
+        }
     }
 
     @FunctionalInterface

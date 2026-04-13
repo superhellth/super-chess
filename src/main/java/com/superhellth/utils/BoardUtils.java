@@ -10,8 +10,12 @@ public class BoardUtils {
 
     public static int[] getRankAndFileFromSquareIndex(int squareIndex) {
         int file = squareIndex % 8;
-        int rank = 7 - squareIndex / 8;
-        return new int[]{file, rank};
+        int rank = squareIndex / 8;
+        return new int[]{rank, file};
+    }
+
+    public static int getSquareIndexFromRankAndFile(int rank, int file) {
+        return rank * 8 + file;
     }
 
     public static Color getOppositeColor(Color color) {
