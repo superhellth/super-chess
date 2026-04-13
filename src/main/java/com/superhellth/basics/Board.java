@@ -132,7 +132,7 @@ public class Board {
                 Color color = this.squareColors[squareIndex];
                 PieceType type = this.squarePieceTypes[squareIndex];
 
-                assert (color == Color.EMPTY && type == PieceType.EMPTY) || (color != Color.EMPTY && type == PieceType.EMPTY) : "Inconsistent piece detected";
+                assert (color == Color.EMPTY && type == PieceType.EMPTY) || (color != Color.EMPTY && type != PieceType.EMPTY) : "Inconsistent piece detected";
                 if (type == PieceType.EMPTY) {
                     emptyFiles++;
                 } else {
@@ -282,12 +282,13 @@ public class Board {
             int file = currentChar - 'a';
             int rank = fen.charAt(runningIndex + 1) - '1';
             this.enPassantSquare = rank * 8 + file;
+            runningIndex += 3;
         } else {
             this.enPassantSquare = -1;
+            runningIndex += 2;
         }
 
         // Halfmove clock
-        runningIndex += 2;
         int halfmoveStart = runningIndex;
         while (fen.charAt(runningIndex) != ' ') {
             runningIndex++;
