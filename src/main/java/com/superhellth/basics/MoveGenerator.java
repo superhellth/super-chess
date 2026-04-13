@@ -49,6 +49,9 @@ public class MoveGenerator {
         }
     }
 
+    // Opposite direction indices: N↔S, E↔W, NW↔SE, NE↔SW
+    private static final int[] OPPOSITE_DIR = {1, 0, 3, 2, 7, 6, 5, 4};
+
     // Whether the closest blocker on this ray has the lowest bit index (true) or highest (false)
     private static final boolean[] RAY_SCAN_LSB = {
         true,   // NORTH
@@ -92,6 +95,7 @@ public class MoveGenerator {
 
         for (Color color : new Color[]{Color.WHITE, Color.BLACK}) {
             Map<Integer, Long> pinMasks = computePinMasks(color);
+            long checkMask = computeCheckMask(color);
 
             int kingSquare = Long.numberOfTrailingZeros(board.getPieceBitboard(color, PieceType.KING));
             Color opponentColor = BoardUtils.getOppositeColor(color);
@@ -99,6 +103,26 @@ public class MoveGenerator {
                     | board.getPieceBitboard(opponentColor, PieceType.QUEEN);
 
             for (Move move : this.pseudoLegalMovesByColor.get(color)) {
+                boolean isKingMove = board.getSquarePieceType(move.getFromSquare()) == PieceType.KING;
+
+                // Check evasion: non-king moves must block or capture the checker
+                if (!isKingMove) {
+                    // En passant can capture a checking pawn (target square != captured pawn square)
+                    boolean isEnPassantCapturingChecker = false;
+                    if (board.getEnPassantSquare() != -1
+                            && board.getEnPassantSquare() == move.getToSquare()
+                            && board.getSquarePieceType(move.getFromSquare()) == PieceType.PAWN) {
+                        int capturedPawnSquare = color == Color.WHITE
+                                ? move.getToSquare() - 8
+                                : move.getToSquare() + 8;
+                        isEnPassantCapturingChecker = (checkMask & (1L << capturedPawnSquare)) != 0;
+                    }
+
+                    if (!isEnPassantCapturingChecker && (checkMask & (1L << move.getToSquare())) == 0) {
+                        continue;
+                    }
+                }
+
                 // Pin restriction: pinned pieces can only move along the pin ray
                 Long pinRay = pinMasks.get(move.getFromSquare());
                 if (pinRay != null && (pinRay & (1L << move.getToSquare())) == 0) {
@@ -174,6 +198,62 @@ public class MoveGenerator {
         }
 
         return pinMasks;
+    }
+
+    /**
+     * Computes a bitmask of squares that non-king pieces are allowed to move to.
+     * - No check: ~0L (all squares allowed)
+     * - Single check: checker square + interposing squares (for sliding checkers)
+     * - Double check: 0L (only king moves are legal)
+     */
+    private long computeCheckMask(Color color) {
+        int kingSquare = Long.numberOfTrailingZeros(board.getPieceBitboard(color, PieceType.KING));
+        if (kingSquare >= 64) return ~0L;
+
+        Color opponentColor = BoardUtils.getOppositeColor(color);
+        long allOccupancy = ~board.getOccupancyBitboard(Color.EMPTY);
+        long checkers = 0L;
+
+        // Knight checks
+        checkers |= KNIGHT_ATTACKS[kingSquare] & board.getPieceBitboard(opponentColor, PieceType.KNIGHT);
+
+        // Pawn checks (attack from king's perspective as if king were a pawn)
+        long kingBit = 1L << kingSquare;
+        long pawnAttacksFromKing = generatePawnAttacks(color, Direction.EAST, kingBit)
+                | generatePawnAttacks(color, Direction.WEST, kingBit);
+        checkers |= pawnAttacksFromKing & board.getPieceBitboard(opponentColor, PieceType.PAWN);
+
+        // Sliding piece checks
+        long rookAttacksFromKing = generateAttacksFromMagic(kingSquare, allOccupancy, PieceType.ROOK);
+        long bishopAttacksFromKing = generateAttacksFromMagic(kingSquare, allOccupancy, PieceType.BISHOP);
+        checkers |= rookAttacksFromKing & (board.getPieceBitboard(opponentColor, PieceType.ROOK)
+                | board.getPieceBitboard(opponentColor, PieceType.QUEEN));
+        checkers |= bishopAttacksFromKing & (board.getPieceBitboard(opponentColor, PieceType.BISHOP)
+                | board.getPieceBitboard(opponentColor, PieceType.QUEEN));
+
+        int checkerCount = Long.bitCount(checkers);
+        if (checkerCount == 0) return ~0L;
+        if (checkerCount >= 2) return 0L;
+
+        // Single check: mask = checker square + interposing squares for sliding checkers
+        int checkerSquare = Long.numberOfTrailingZeros(checkers);
+        long checkMask = 1L << checkerSquare;
+
+        PieceType checkerType = board.getSquarePieceType(checkerSquare);
+        if (checkerType == PieceType.ROOK || checkerType == PieceType.BISHOP || checkerType == PieceType.QUEEN) {
+            // Find the ray direction from king to checker
+            for (int dir = 0; dir < 8; dir++) {
+                long ray = MagicConstants.RAY_MASKS[kingSquare][dir];
+                if ((ray & (1L << checkerSquare)) != 0) {
+                    // Interposing squares: on the ray from king, before the checker
+                    long interposing = ray & ~MagicConstants.RAY_MASKS[checkerSquare][dir] & ~(1L << checkerSquare);
+                    checkMask |= interposing;
+                    break;
+                }
+            }
+        }
+
+        return checkMask;
     }
 
     // Getters for moves by square
@@ -263,10 +343,39 @@ public class MoveGenerator {
     private static final long[] EMPTY_MASKS = {0x60L, 0x0EL, 0x60L << 56, 0x0EL << 56};
     private static final long[] SAFE_MASKS = {0x70L, 0x1CL, 0x70L << 56, 0x1CL << 56};
 
+    private long computeSlidingAttacksWithoutKing(Color opponentColor, long occupancyWithoutKing) {
+        long slidingAttacks = 0L;
+        long rooks = board.getPieceBitboard(opponentColor, PieceType.ROOK);
+        long bishops = board.getPieceBitboard(opponentColor, PieceType.BISHOP);
+        long queens = board.getPieceBitboard(opponentColor, PieceType.QUEEN);
+
+        long rooksAndQueens = rooks | queens;
+        while (rooksAndQueens != 0) {
+            int sq = Long.numberOfTrailingZeros(rooksAndQueens);
+            slidingAttacks |= generateAttacksFromMagic(sq, occupancyWithoutKing, PieceType.ROOK);
+            rooksAndQueens &= rooksAndQueens - 1;
+        }
+        long bishopsAndQueens = bishops | queens;
+        while (bishopsAndQueens != 0) {
+            int sq = Long.numberOfTrailingZeros(bishopsAndQueens);
+            slidingAttacks |= generateAttacksFromMagic(sq, occupancyWithoutKing, PieceType.BISHOP);
+            bishopsAndQueens &= bishopsAndQueens - 1;
+        }
+        return slidingAttacks;
+    }
+
     private List<Move> generateKingMoves(Color color) {
         long kingBitboard = this.board.getPieceBitboard(color, PieceType.KING);
         long sameColorOccupancy = this.board.getOccupancyBitboard(color);
-        long opponentAttacks = this.getColorAttacks(BoardUtils.getOppositeColor(color));
+        Color opponentColor = BoardUtils.getOppositeColor(color);
+
+        // Recompute sliding attacks with king removed to prevent x-ray hiding
+        long occupancyWithoutKing = (~board.getOccupancyBitboard(Color.EMPTY)) & ~kingBitboard;
+        long opponentSlidingAttacks = computeSlidingAttacksWithoutKing(opponentColor, occupancyWithoutKing);
+        long opponentNonSlidingAttacks = this.attackBitboards.get(PieceType.PAWN)[opponentColor.ordinal()]
+                | this.attackBitboards.get(PieceType.KNIGHT)[opponentColor.ordinal()]
+                | this.attackBitboards.get(PieceType.KING)[opponentColor.ordinal()];
+        long opponentAttacks = opponentSlidingAttacks | opponentNonSlidingAttacks;
 
         List<Move> kingMoves = new ArrayList<>();
         int fromSquare = Long.numberOfTrailingZeros(kingBitboard);
