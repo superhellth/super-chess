@@ -2,6 +2,8 @@
 
 A chess engine and interactive GUI built with Java and JavaFX.
 
+<img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/b894b076-8b9f-4422-8dba-b1009aa0d771" />
+
 ## Features
 
 - **Bitboard-based board representation** -- uses `long[2][6]` bitboards (2 colors x 6 piece types) with redundant square-lookup arrays for O(1) access
