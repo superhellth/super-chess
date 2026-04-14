@@ -25,13 +25,29 @@ public class Game {
     }
 
     public void executeMove(Move move) {
+        this.makeMove(move);
+        this.moveGenerator.generateAllLegalMoves();
+    }
+
+    /**
+     * Applies a move to the board and returns undo state. Does NOT regenerate legal moves.
+     */
+    public MoveUndo makeMove(Move move) {
         int fromSquare = move.getFromSquare();
         int toSquare = move.getToSquare();
 
         Color sourceColor = this.board.getSquareColor(fromSquare);
-        assert sourceColor == this.board.getActiveColor() : "Executing move of inactive color!";
         PieceType sourceType = this.board.getSquarePieceType(fromSquare);
-        assert (sourceColor != Color.EMPTY) && (sourceType != PieceType.EMPTY) : "Empty piece / color making a move!";
+
+        // Save undo state
+        PieceType capturedType = this.board.getSquarePieceType(toSquare);
+        Color capturedColor = this.board.getSquareColor(toSquare);
+        MoveUndo undo = new MoveUndo(
+                capturedType, capturedColor,
+                this.board.getCastlingRightsRaw().clone(),
+                this.board.getEnPassantSquare(),
+                this.board.getHalfmoveClock()
+        );
 
         // Move pieces
         this.board.removePiece(fromSquare);
@@ -70,7 +86,56 @@ public class Game {
 
         // Turn logic
         this.board.setActiveColor(BoardUtils.getOppositeColor(sourceColor));
-        this.moveGenerator.generateAllLegalMoves();
+
+        return undo;
+    }
+
+    /**
+     * Reverses a move using saved undo state. Does NOT regenerate legal moves.
+     */
+    public void undoMove(Move move, MoveUndo undo) {
+        int fromSquare = move.getFromSquare();
+        int toSquare = move.getToSquare();
+
+        // The piece that moved is now at toSquare (or promoted piece)
+        Color sourceColor = this.board.getSquareColor(toSquare);
+        PieceType movedType = this.board.getSquarePieceType(toSquare);
+
+        // If promotion, the original piece was a pawn
+        PieceType originalType = move.getPromotionPieceType() != PieceType.EMPTY ? PieceType.PAWN : movedType;
+
+        // Remove piece from destination
+        this.board.removePiece(toSquare);
+
+        // Place piece back at origin
+        this.board.placePiece(sourceColor, originalType, fromSquare);
+
+        // Restore captured piece (normal capture)
+        if (undo.capturedType != PieceType.EMPTY) {
+            this.board.placePiece(undo.capturedColor, undo.capturedType, toSquare);
+        }
+
+        // Undo en passant capture
+        if (originalType == PieceType.PAWN && toSquare == undo.enPassantSquare && undo.enPassantSquare != -1) {
+            Color opponentColor = BoardUtils.getOppositeColor(sourceColor);
+            int capturedPawnSquare = sourceColor == Color.WHITE ? toSquare - 8 : toSquare + 8;
+            this.board.placePiece(opponentColor, PieceType.PAWN, capturedPawnSquare);
+        }
+
+        // Undo castling rook movement
+        if (originalType == PieceType.KING && Math.abs(toSquare - fromSquare) == 2) {
+            boolean kingside = toSquare > fromSquare;
+            int rookFrom = kingside ? fromSquare + 3 : fromSquare - 4;
+            int rookTo = kingside ? fromSquare + 1 : fromSquare - 1;
+            this.board.removePiece(rookTo);
+            this.board.placePiece(sourceColor, PieceType.ROOK, rookFrom);
+        }
+
+        // Restore state
+        this.board.setCastlingRightsRaw(undo.castlingRights);
+        this.board.setEnPassantSquare(undo.enPassantSquare);
+        this.board.setHalfmoveClock(undo.halfmoveClock);
+        this.board.setActiveColor(sourceColor);
     }
 
     public List<Move> getPseudoLegalMovesFromSquare(int squareIndex) {

@@ -14,18 +14,12 @@ public class PerftTest {
         }
 
         List<Move> moves = game.getMoveGenerator().generateAllLegalMoves();
-        Color activeColor = game.getBoard().getActiveColor();
         long nodes = 0;
 
         for (Move move : moves) {
-            if (game.getBoard().getSquareColor(move.getFromSquare()) != activeColor) {
-                continue;
-            }
-            String fenBackup = game.getBoard().toFEN();
-            game.executeMove(move);
+            MoveUndo undo = game.makeMove(move);
             nodes += perft(game, depth - 1);
-            game.getBoard().loadFromFEN(fenBackup);
-            game.getMoveGenerator().generateAllLegalMoves();
+            game.undoMove(move, undo);
         }
 
         return nodes;
@@ -40,8 +34,7 @@ public class PerftTest {
         long total = 0;
 
         for (Move move : moves) {
-            String fenBackup = game.getBoard().toFEN();
-            game.executeMove(move);
+            MoveUndo undo = game.makeMove(move);
             long nodes = perft(game, depth - 1);
             total += nodes;
             String from = squareName(move.getFromSquare());
@@ -49,8 +42,7 @@ public class PerftTest {
             String promo = move.getPromotionPieceType() != PieceType.EMPTY
                     ? move.getPromotionPieceType().name().toLowerCase() : "";
             System.out.println(from + to + promo + ": " + nodes);
-            game.getBoard().loadFromFEN(fenBackup);
-            game.getMoveGenerator().generateAllLegalMoves();
+            game.undoMove(move, undo);
         }
 
         System.out.println("Total: " + total);

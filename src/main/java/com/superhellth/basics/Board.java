@@ -103,6 +103,14 @@ public class Board {
         this.castlingRights[color == Color.WHITE ? side : 2 + side] = false;
     }
 
+    public boolean[] getCastlingRightsRaw() {
+        return this.castlingRights;
+    }
+
+    public void setCastlingRightsRaw(boolean[] rights) {
+        this.castlingRights = rights;
+    }
+
     public int getEnPassantSquare() {
         return this.enPassantSquare;
     }
@@ -117,6 +125,14 @@ public class Board {
 
     public void setActiveColor(Color color) {
         this.activeColor = color;
+    }
+
+    public int getHalfmoveClock() {
+        return this.halfmoveClock;
+    }
+
+    public void setHalfmoveClock(int halfmoveClock) {
+        this.halfmoveClock = halfmoveClock;
     }
 
     public String toFEN() {
