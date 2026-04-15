@@ -1,9 +1,13 @@
 package com.superhellth.ui;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.superhellth.basics.Board;
 import com.superhellth.basics.Color;
 import com.superhellth.basics.Game;
 import com.superhellth.basics.Move;
+import com.superhellth.basics.MoveGenerator;
 import com.superhellth.basics.PieceType;
 import com.superhellth.utils.BoardUtils;
 
@@ -16,6 +20,7 @@ public class BoardGrid extends GridPane {
     private final Game game;
     private final Board board;
     private final BoardSquare[] squares = new BoardSquare[64];
+    private final MoveGenerator moveGenerator;
     private BoardSquare selectedSquare = null;
     private Move pendingPromotionMove = null;
     private int[] promotionOptionSquares = null;
@@ -24,6 +29,7 @@ public class BoardGrid extends GridPane {
         super();
         this.game = game;
         this.board = game.getBoard();
+        this.moveGenerator = game.getMoveGenerator();
 
         // Initialize squares
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
@@ -64,7 +70,7 @@ public class BoardGrid extends GridPane {
             clearPromotionOptions();
             if (chosenPiece != null) {
                 this.pendingPromotionMove.setPromotionPieceType(chosenPiece);
-                this.game.executeMove(this.pendingPromotionMove);
+                this.game.makeMove(this.pendingPromotionMove);
             }
             this.pendingPromotionMove = null;
             this.selectedSquare = null;
@@ -86,13 +92,13 @@ public class BoardGrid extends GridPane {
             if (square.isTargetMovePromotion()) {
                 showPromotionOptions(squareTargetMove);
             } else {
-                this.game.executeMove(squareTargetMove);
+                this.game.makeMove(squareTargetMove);
                 this.selectedSquare = null;
                 this.loadBoard();
             }
         } else {
             this.selectedSquare = square;
-            for (Move move : this.game.getPseudoLegalMovesFromSquare(squareIndex)) {
+            for (Move move : this.getLegalMovesFromSquare(squareIndex)) {
                 int targetSquareIndex = move.getToSquare();
                 boolean isCapture = this.board.getSquareColor(targetSquareIndex) != Color.EMPTY;
                 this.squares[targetSquareIndex].setTargetMove(move, isCapture);
@@ -134,6 +140,15 @@ public class BoardGrid extends GridPane {
                 this.squares[squareIndex].clearPromotionOption();
             }
             this.promotionOptionSquares = null;
+        }
+    }
+
+    private List<Move> getLegalMovesFromSquare(int squareIndex) {
+        Color squareColor = this.board.getSquareColor(squareIndex);
+        if (squareColor == this.board.getActiveColor()) {
+            return this.moveGenerator.getAllMovesBySquareList(squareIndex);
+        } else {
+            return new ArrayList<>();
         }
     }
 

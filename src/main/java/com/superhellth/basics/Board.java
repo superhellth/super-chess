@@ -136,8 +136,6 @@ public class Board {
     }
 
     public String toFEN() {
-        int boardIndex = 56;
-        int fileIndex = 0;
         String fen = "";
 
         // Piece setup

@@ -1,6 +1,5 @@
 package com.superhellth.basics;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.superhellth.utils.BoardUtils;
@@ -8,11 +7,11 @@ import com.superhellth.utils.BoardUtils;
 public class Game {
 
     public static final String STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    private static final String TEST_FEN = "r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 1";
 
     private Board board;
+    private GameState gameState;
     private MoveGenerator moveGenerator;
-    private String fen;
+    private int moveCount = 0;
 
     public Game() {
         this(Game.STARTING_FEN);
@@ -20,17 +19,14 @@ public class Game {
 
     public Game(String fen) {
         this.board = new Board(fen);
+        this.gameState = GameState.ONGOING;
         this.moveGenerator = new MoveGenerator(this.board);
-        this.moveGenerator.generateAllLegalMoves();
-    }
-
-    public void executeMove(Move move) {
-        this.makeMove(move);
-        this.moveGenerator.generateAllLegalMoves();
+        this.moveGenerator.generateLegalMoves();
     }
 
     /**
-     * Applies a move to the board and returns undo state. Does NOT regenerate legal moves.
+     * Applies a move to the board and returns undo state. Does NOT regenerate
+     * legal moves.
      */
     public MoveUndo makeMove(Move move) {
         int fromSquare = move.getFromSquare();
@@ -87,6 +83,20 @@ public class Game {
         // Turn logic
         this.board.setActiveColor(BoardUtils.getOppositeColor(sourceColor));
 
+        this.moveGenerator.generateLegalMoves();
+        this.moveCount++;
+
+        // Game state check
+        if (this.moveGenerator.getLegalMoves().isEmpty()) {
+            if ((this.board.getPieceBitboard(this.board.getActiveColor(), PieceType.KING) & this.moveGenerator.getAttackBitboardByColor(sourceColor)) != 0) {
+                this.gameState = sourceColor == Color.WHITE ? GameState.WHITE_WINS : GameState.BLACK_WINS;
+            } else {
+                this.gameState = GameState.DRAW;
+            }
+        } else if (this.moveCount >= 200) {
+            this.gameState = GameState.DRAW;
+        }
+
         return undo;
     }
 
@@ -136,24 +146,25 @@ public class Game {
         this.board.setEnPassantSquare(undo.enPassantSquare);
         this.board.setHalfmoveClock(undo.halfmoveClock);
         this.board.setActiveColor(sourceColor);
-    }
-
-    public List<Move> getPseudoLegalMovesFromSquare(int squareIndex) {
-        Color squareColor = this.board.getSquareColor(squareIndex);
-        if (squareColor == this.board.getActiveColor()) {
-            return this.moveGenerator.getAllMovesBySquareList(squareIndex);
-        } else {
-            return new ArrayList<>();
-        }
+        this.moveGenerator.generateLegalMoves();
     }
 
     public Board getBoard() {
         return this.board;
     }
 
+    public GameState getGameState() {
+        return this.gameState;
+    }
+
     public MoveGenerator getMoveGenerator() {
         return this.moveGenerator;
     }
+
+    public List<Move> getLegalMoves() {
+        return this.moveGenerator.getLegalMoves();
+    }
+
 
     // Rook home squares: white kingside=7(h1), white queenside=0(a1), black kingside=63(h8), black queenside=56(a8)
     private static final int[] ROOK_HOME_SQUARES = {7, 0, 63, 56};

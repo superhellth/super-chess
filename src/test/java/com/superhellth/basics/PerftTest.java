@@ -13,7 +13,7 @@ public class PerftTest {
             return 1;
         }
 
-        List<Move> moves = game.getMoveGenerator().generateAllLegalMoves();
+        List<Move> moves = game.getLegalMoves();
         long nodes = 0;
 
         for (Move move : moves) {
@@ -23,29 +23,6 @@ public class PerftTest {
         }
 
         return nodes;
-    }
-
-    /**
-     * Divide: prints per-root-move node counts for debugging.
-     * Run manually when a perft test fails to isolate the faulty move.
-     */
-    private void divide(Game game, int depth) {
-        List<Move> moves = game.getMoveGenerator().generateAllLegalMoves();
-        long total = 0;
-
-        for (Move move : moves) {
-            MoveUndo undo = game.makeMove(move);
-            long nodes = perft(game, depth - 1);
-            total += nodes;
-            String from = squareName(move.getFromSquare());
-            String to = squareName(move.getToSquare());
-            String promo = move.getPromotionPieceType() != PieceType.EMPTY
-                    ? move.getPromotionPieceType().name().toLowerCase() : "";
-            System.out.println(from + to + promo + ": " + nodes);
-            game.undoMove(move, undo);
-        }
-
-        System.out.println("Total: " + total);
     }
 
     private String squareName(int square) {
