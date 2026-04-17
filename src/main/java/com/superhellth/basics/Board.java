@@ -28,6 +28,8 @@ public class Board {
     }
 
     public void placePiece(Color color, PieceType pieceType, int square) {
+        assert color != Color.EMPTY : "Cannot place piece with EMPTY color";
+        assert pieceType != PieceType.EMPTY : "Cannot place piece with EMPTY type";
         this.pieceBitboards[color.ordinal()][pieceType.ordinal()] |= (1L << square);
         this.occupancyBitboards[color.ordinal()] |= (1L << square);
         this.occupancyBitboards[Color.EMPTY.ordinal()] &= ~(1L << square);
@@ -316,6 +318,15 @@ public class Board {
             runningIndex++;
         }
         this.fullmoveNumber = Integer.parseInt(fen.substring(fullmoveStart, runningIndex));
+    }
+
+    @Override
+    public Object clone() {
+        try {
+            return (Board) super.clone();
+        } catch (CloneNotSupportedException e) {
+            return new Board(this.toFEN());
+        }
     }
 
 }

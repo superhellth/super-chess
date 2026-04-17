@@ -1,19 +1,26 @@
 package com.superhellth.ui;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import com.superhellth.basics.Board;
 import com.superhellth.basics.Color;
 import com.superhellth.basics.Game;
+import com.superhellth.basics.GameState;
 import com.superhellth.basics.Move;
 import com.superhellth.basics.MoveGenerator;
 import com.superhellth.basics.PieceType;
+import com.superhellth.bots.Bot;
 import com.superhellth.utils.BoardUtils;
 
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.RowConstraints;
+import javafx.util.Duration;
 
 public class BoardGrid extends GridPane {
 
@@ -21,21 +28,36 @@ public class BoardGrid extends GridPane {
     private final Board board;
     private final BoardSquare[] squares = new BoardSquare[64];
     private final MoveGenerator moveGenerator;
+    private final Set<Color> humanColors;
+    private final Bot bot;
+    private final Color orientation;
+    private Runnable onStateChange;
     private BoardSquare selectedSquare = null;
     private Move pendingPromotionMove = null;
     private int[] promotionOptionSquares = null;
 
-    public BoardGrid(Game game) {
+    public BoardGrid(Game game, Set<Color> humanColors, Bot bot, Color orientation) {
         super();
         this.game = game;
         this.board = game.getBoard();
         this.moveGenerator = game.getMoveGenerator();
+        this.humanColors = humanColors;
+        this.bot = bot;
+        this.orientation = orientation;
+
+        if (bot != null) {
+            bot.setup(this.game);
+        }
 
         // Initialize squares
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             this.squares[squareIndex] = new BoardSquare(squareIndex, this::handleSquareClick);
             int[] rankAndFile = BoardUtils.getRankAndFileFromSquareIndex(squareIndex);
-            this.add(this.squares[squareIndex], rankAndFile[1], 7 - rankAndFile[0]);
+            int rank = rankAndFile[0];
+            int file = rankAndFile[1];
+            int col = orientation == Color.WHITE ? file : 7 - file;
+            int row = orientation == Color.WHITE ? 7 - rank : rank;
+            this.add(this.squares[squareIndex], col, row);
         }
         this.loadBoard();
 
@@ -51,6 +73,9 @@ public class BoardGrid extends GridPane {
             row.setFillHeight(true);
             getRowConstraints().add(row);
         }
+
+        // Trigger bot if bot starts
+        maybeTriggerBot();
     }
 
     private void loadBoard() {
@@ -63,7 +88,19 @@ public class BoardGrid extends GridPane {
         }
     }
 
+    private boolean isHumanTurn() {
+        return this.humanColors.contains(this.board.getActiveColor());
+    }
+
     private void handleSquareClick(BoardSquare square) {
+        // Block input if bot's turn or game ended
+        if (this.game.getGameState() != GameState.ONGOING) {
+            return;
+        }
+        if (this.pendingPromotionMove == null && !isHumanTurn()) {
+            return;
+        }
+
         // Handle click during promotion selection
         if (this.pendingPromotionMove != null) {
             PieceType chosenPiece = square.getPromotionOption();
@@ -75,6 +112,8 @@ public class BoardGrid extends GridPane {
             this.pendingPromotionMove = null;
             this.selectedSquare = null;
             this.loadBoard();
+            notifyStateChange();
+            maybeTriggerBot();
             return;
         }
 
@@ -95,6 +134,8 @@ public class BoardGrid extends GridPane {
                 this.game.makeMove(squareTargetMove);
                 this.selectedSquare = null;
                 this.loadBoard();
+                this.notifyStateChange();
+                maybeTriggerBot();
             }
         } else {
             this.selectedSquare = square;
@@ -106,6 +147,26 @@ public class BoardGrid extends GridPane {
             }
             square.select();
         }
+    }
+
+    private void maybeTriggerBot() {
+        if (this.bot == null) return;
+        if (this.game.getGameState() != GameState.ONGOING) return;
+        if (isHumanTurn()) return;
+
+        PauseTransition pause = new PauseTransition(Duration.millis(300));
+        pause.setOnFinished(e -> {
+            if (this.game.getGameState() != GameState.ONGOING) return;
+            if (isHumanTurn()) return;
+            List<Move> legal = this.game.getLegalMoves();
+            if (legal.isEmpty()) return;
+            Move botMove = this.bot.selectMove();
+            this.game.makeMove(botMove);
+            this.loadBoard();
+            this.notifyStateChange();
+            Platform.runLater(this::maybeTriggerBot);
+        });
+        pause.play();
     }
 
     private void showPromotionOptions(Move move) {
@@ -156,6 +217,31 @@ public class BoardGrid extends GridPane {
         for (int i = 0; i < 64; i++) {
             this.squares[i].setTargetMove(null, false);
         }
+    }
+
+    public GameState getGameState() {
+        return this.game.getGameState();
+    }
+
+    public Color getActiveColor() {
+        return this.board.getActiveColor();
+    }
+
+    public void setOnStateChange(Runnable callback) {
+        this.onStateChange = callback;
+        if (callback != null) callback.run();
+    }
+
+    private void notifyStateChange() {
+        if (this.onStateChange != null) this.onStateChange.run();
+    }
+
+    public static Set<Color> bothColors() {
+        return EnumSet.of(Color.WHITE, Color.BLACK);
+    }
+
+    public static Set<Color> onlyColor(Color c) {
+        return EnumSet.of(c);
     }
 
 }

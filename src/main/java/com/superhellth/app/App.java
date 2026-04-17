@@ -1,8 +1,5 @@
 package com.superhellth.app;
 
-import com.superhellth.basics.Game;
-import com.superhellth.bots.Bot;
-import com.superhellth.bots.RandomBot;
 import com.superhellth.ui.MainWindow;
 
 import javafx.application.Application;
@@ -15,17 +12,16 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) {
-        Game game = new Game();
-        MainWindow mainWindow = new MainWindow(game);
+        MainWindow mainWindow = new MainWindow();
         mainWindow.show(stage);
     }
 
     public static void main(String[] args) {
-        // launch(args); // for ui
-        Bot whiteBot = new RandomBot();
-        Bot blackBot = new RandomBot();
-        Simulation simulation = new Simulation(whiteBot, blackBot);
-        simulation.run(10000);
-        System.exit(0);
+        launch(args); // for ui
+        // Bot bot1 = new EvalBot1(0);
+        // Bot bot2 = new EvalBot1(2);
+        // Simulation simulation = new Simulation(bot1, bot2);
+        // simulation.run(20);
+        // System.exit(0);
     }
 }

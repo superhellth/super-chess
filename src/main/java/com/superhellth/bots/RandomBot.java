@@ -7,8 +7,8 @@ import com.superhellth.basics.Move;
 public class RandomBot extends Bot {
 
     @Override
-    public Move selectMove(List<Move> legalMoves) {
-        // Implementation for selecting a random legal move
+    public Move selectMoveImpl() {
+        List<Move> legalMoves = this.moveGenerator.getLegalMoves();
         int randInt = (int) (Math.random() * legalMoves.size());
         return legalMoves.get(randInt);
     }

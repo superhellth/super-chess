@@ -1,6 +1,9 @@
 package com.superhellth.basics;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.superhellth.utils.BoardUtils;
 
@@ -12,6 +15,7 @@ public class Game {
     private GameState gameState;
     private MoveGenerator moveGenerator;
     private int moveCount = 0;
+    private final Map<String, Integer> positionHistory = new HashMap<>();
 
     public Game() {
         this(Game.STARTING_FEN);
@@ -22,18 +26,16 @@ public class Game {
         this.gameState = GameState.ONGOING;
         this.moveGenerator = new MoveGenerator(this.board);
         this.moveGenerator.generateLegalMoves();
+        this.recordPosition();
     }
 
-    /**
-     * Applies a move to the board and returns undo state. Does NOT regenerate
-     * legal moves.
-     */
     public MoveUndo makeMove(Move move) {
         int fromSquare = move.getFromSquare();
         int toSquare = move.getToSquare();
 
         Color sourceColor = this.board.getSquareColor(fromSquare);
         PieceType sourceType = this.board.getSquarePieceType(fromSquare);
+        assert sourceColor != Color.EMPTY || sourceType != PieceType.EMPTY : "No piece at fromSquare, square: " + fromSquare;
 
         // Save undo state
         PieceType capturedType = this.board.getSquarePieceType(toSquare);
@@ -80,29 +82,41 @@ public class Game {
             this.board.placePiece(sourceColor, move.getPromotionPieceType(), toSquare);
         }
 
+        // Halfmove clock: reset on pawn move or capture, otherwise increment
+        if (sourceType == PieceType.PAWN || capturedType != PieceType.EMPTY) {
+            this.board.setHalfmoveClock(0);
+        } else {
+            this.board.setHalfmoveClock(this.board.getHalfmoveClock() + 1);
+        }
+
         // Turn logic
         this.board.setActiveColor(BoardUtils.getOppositeColor(sourceColor));
 
         this.moveGenerator.generateLegalMoves();
         this.moveCount++;
+        this.recordPosition();
 
         // Game state check
         if (this.moveGenerator.getLegalMoves().isEmpty()) {
             if ((this.board.getPieceBitboard(this.board.getActiveColor(), PieceType.KING) & this.moveGenerator.getAttackBitboardByColor(sourceColor)) != 0) {
-                this.gameState = sourceColor == Color.WHITE ? GameState.WHITE_WINS : GameState.BLACK_WINS;
+                this.gameState = sourceColor == Color.WHITE ? GameState.WHITE_WINS_BY_CHECKMATE : GameState.BLACK_WINS_BY_CHECKMATE;
             } else {
-                this.gameState = GameState.DRAW;
+                this.gameState = GameState.DRAW_BY_STALEMATE;
             }
+        } else if (this.getPositionCount() >= 3) {
+            this.gameState = GameState.DRAW_BY_REPETITION;
+        } else if (this.board.getHalfmoveClock() >= 100) {
+            this.gameState = GameState.DRAW_BY_FIFTY_MOVE_RULE;
+        } else if (this.isInsufficientMaterial()) {
+            this.gameState = GameState.DRAW_BY_INSUFFICIENT_MATERIAL;
         } else if (this.moveCount >= 200) {
-            this.gameState = GameState.DRAW;
+            this.gameState = GameState.DRAW_BY_MOVE_LIMIT;
         }
 
         return undo;
     }
 
-    /**
-     * Reverses a move using saved undo state. Does NOT regenerate legal moves.
-     */
+
     public void undoMove(Move move, MoveUndo undo) {
         int fromSquare = move.getFromSquare();
         int toSquare = move.getToSquare();
@@ -146,6 +160,18 @@ public class Game {
         this.board.setEnPassantSquare(undo.enPassantSquare);
         this.board.setHalfmoveClock(undo.halfmoveClock);
         this.board.setActiveColor(sourceColor);
+
+        // Undo position history
+        String key = this.getPositionKey();
+        int count = this.positionHistory.getOrDefault(key, 0);
+        if (count <= 1) {
+            this.positionHistory.remove(key);
+        } else {
+            this.positionHistory.put(key, count - 1);
+        }
+        this.moveCount--;
+        this.gameState = GameState.ONGOING;
+
         this.moveGenerator.generateLegalMoves();
     }
 
@@ -193,5 +219,58 @@ public class Game {
                 this.board.revokeCastlingRight(opponentColor, side);
             }
         }
+    }
+
+    /**
+     * Returns position key for repetition detection.
+     * Uses FEN without halfmove clock and fullmove number.
+     */
+    private String getPositionKey() {
+        String fen = this.board.toFEN();
+        // Strip last two fields (halfmove clock, fullmove number)
+        int lastSpace = fen.lastIndexOf(' ');
+        int secondLastSpace = fen.lastIndexOf(' ', lastSpace - 1);
+        return fen.substring(0, secondLastSpace);
+    }
+
+    private void recordPosition() {
+        String key = this.getPositionKey();
+        this.positionHistory.merge(key, 1, Integer::sum);
+    }
+
+    private int getPositionCount() {
+        return this.positionHistory.getOrDefault(this.getPositionKey(), 0);
+    }
+
+    private boolean isInsufficientMaterial() {
+        // Count all pieces (excluding kings)
+        for (PieceType type : new PieceType[]{PieceType.PAWN, PieceType.ROOK, PieceType.QUEEN}) {
+            if (this.board.getPieceBitboard(Color.WHITE, type) != 0 || this.board.getPieceBitboard(Color.BLACK, type) != 0) {
+                return false;
+            }
+        }
+
+        long whiteKnights = this.board.getPieceBitboard(Color.WHITE, PieceType.KNIGHT);
+        long blackKnights = this.board.getPieceBitboard(Color.BLACK, PieceType.KNIGHT);
+        long whiteBishops = this.board.getPieceBitboard(Color.WHITE, PieceType.BISHOP);
+        long blackBishops = this.board.getPieceBitboard(Color.BLACK, PieceType.BISHOP);
+
+        int whiteMinors = Long.bitCount(whiteKnights) + Long.bitCount(whiteBishops);
+        int blackMinors = Long.bitCount(blackKnights) + Long.bitCount(blackBishops);
+
+        // K vs K
+        if (whiteMinors == 0 && blackMinors == 0) return true;
+        // K+minor vs K
+        if ((whiteMinors == 1 && blackMinors == 0) || (whiteMinors == 0 && blackMinors == 1)) return true;
+        // K+B vs K+B (same color bishops)
+        if (whiteMinors == 1 && blackMinors == 1
+                && Long.bitCount(whiteBishops) == 1 && Long.bitCount(blackBishops) == 1) {
+            int wbSquare = Long.numberOfTrailingZeros(whiteBishops);
+            int bbSquare = Long.numberOfTrailingZeros(blackBishops);
+            // Same color = same parity of (rank + file)
+            return ((wbSquare / 8 + wbSquare % 8) % 2) == ((bbSquare / 8 + bbSquare % 8) % 2);
+        }
+
+        return false;
     }
 }
